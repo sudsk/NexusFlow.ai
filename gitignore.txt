@@ -1,0 +1,95 @@
+# Python bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Distributions / packaging
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+
+# Sphinx documentation
+docs/_build/
+docs/build/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+.python-version
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Project specific
+logs/
+data/
+checkpoints/
+*.log
+
+# Environment secrets
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+.env.local.json
+.env.development.json
+.env.test.json
+.env.production.json
+
+# Keys and certificates
+*.pem
+*.key
+*.cert
+*.crt
+*.p12
+
+# Generated files
+temp/
+tmp/
+generated/
+
+# Debug
+debug.py
+debug_*.py
+test.py
+playground.py
