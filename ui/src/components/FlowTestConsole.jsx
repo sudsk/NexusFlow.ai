@@ -1,4 +1,5 @@
 // frontend/src/components/FlowTestConsole.jsx
+/* eslint-disable no-unused-vars */
 import React, { useState } from 'react';
 import { Button, Textarea, Spinner, Box } from '@chakra-ui/react';
 import FlowExecutionVisualizer from './FlowExecutionVisualizer';
