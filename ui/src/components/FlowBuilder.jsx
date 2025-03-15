@@ -25,7 +25,6 @@ import AgentNode from './AgentNode';
 import AgentConfigEditor from './AgentConfigEditor';
 import NodePropertiesPanel from './NodePropertiesPanel';
 import FlowPropertiesPanel from './FlowPropertiesPanel';
-import axios from 'axios';
 
 // Define custom node types
 const nodeTypes = {
@@ -156,8 +155,8 @@ const FlowBuilder = ({ flowId, initialData, onSave }) => {
     setIsLoading(true);
     try {
       const response = flowId
-        ? await axios.put(`/api/nexusflow/flows/${flowId}`, { flow_config: flowConfig })
-        : await axios.post('/api/nexusflow/flows', { flow_config: flowConfig });
+        ? await apiService.flows.update(flowId, flowConfig)
+        : await apiService.flows.create(flowConfig);
       
       toast({
         title: 'Success',
