@@ -8,16 +8,14 @@ This package contains specific agent implementations:
 - AnalysisAgent: Agent for data analysis
 """
 
-# Import once implemented
-# from nexusflow.agents.reasoning_agent import ReasoningAgent
-# from nexusflow.agents.retrieval_agent import RetrievalAgent
-# from nexusflow.agents.coding_agent import CodingAgent
-# from nexusflow.agents.analysis_agent import AnalysisAgent
+from nexusflow.agents.reasoning_agent import ReasoningAgent
+from nexusflow.agents.retrieval_agent import RetrievalAgent
+from nexusflow.agents.coding_agent import CodingAgent
+from nexusflow.agents.analysis_agent import AnalysisAgent
 
 __all__ = [
-    # These would be added once implemented
-    # 'ReasoningAgent',
-    # 'RetrievalAgent',
-    # 'CodingAgent',
-    # 'AnalysisAgent',
+    'ReasoningAgent',
+    'RetrievalAgent',
+    'CodingAgent',
+    'AnalysisAgent',
 ]
