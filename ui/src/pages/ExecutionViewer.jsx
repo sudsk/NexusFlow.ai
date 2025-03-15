@@ -45,7 +45,6 @@ import {
 } from 'react-icons/fi';
 import ReactFlow, { Background, Controls } from 'reactflow';
 import 'reactflow/dist/style.css';
-import axios from 'axios';
 
 const ExecutionViewer = () => {
   const { executionId } = useParams();
