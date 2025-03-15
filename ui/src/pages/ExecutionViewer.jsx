@@ -21,14 +21,21 @@ import {
   Divider,
   Spinner,
   Button,
-  List,
-  ListItem,
   Code,
   useToast,
   useColorModeValue,
   Breadcrumb,
   BreadcrumbItem,
   BreadcrumbLink,
+  Alert,
+  AlertIcon,
+  AlertTitle,
+  AlertDescription,
+  Accordion,
+  AccordionItem,
+  AccordionButton,
+  AccordionPanel,
+  AccordionIcon,
 } from '@chakra-ui/react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
@@ -43,16 +50,21 @@ import {
   FiAlertCircle,
   FiInfo,
   FiDownload,
+  FiRefreshCw,
 } from 'react-icons/fi';
 import ReactFlow, { Background, Controls } from 'reactflow';
 import 'reactflow/dist/style.css';
+import apiService from '../services/api';
 
 const ExecutionViewer = () => {
   const { executionId } = useParams();
   const navigate = useNavigate();
   const toast = useToast();
   const [execution, setExecution] = useState(null);
+  const [flowDetails, setFlowDetails] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [error, setError] = useState(null);
   const [nodes, setNodes] = useState([]);
   const [edges, setEdges] = useState([]);
   
@@ -60,230 +72,230 @@ const ExecutionViewer = () => {
   const borderColor = useColorModeValue('gray.200', 'gray.600');
   const codeBg = useColorModeValue('gray.50', 'gray.700');
 
+  // Fetch execution data
   useEffect(() => {
     const fetchExecutionData = async () => {
       setIsLoading(true);
+      setError(null);
+      
       try {
-        // In a real app, this would be an actual API call
-        // Using mock data for now
-        await new Promise((resolve) => setTimeout(resolve, 1000)); // Simulate API delay
-
-        // Mock execution data
-        const mockExecution = {
-          id: executionId,
-          flow_id: '1',
-          flow_name: 'Research Assistant',
-          status: 'completed',
-          started_at: '2025-03-14T09:23:45Z',
-          completed_at: '2025-03-14T09:25:27Z',
-          duration: '1m 42s',
-          steps: 7,
-          execution_trace: [
-            {
-              type: 'start',
-              timestamp: '2025-03-14T09:23:45Z',
-              step: 1,
-              input: { query: 'What are the environmental impacts of electric vehicles?' }
-            },
-            {
-              type: 'agent_execution',
-              agent_id: 'coordinator',
-              agent_name: 'Research Coordinator',
-              timestamp: '2025-03-14T09:23:47Z',
-              step: 2,
-              output: {
-                content: 'I need to delegate this research task to gather information about electric vehicles.',
-                metadata: {
-                  decision: {
-                    action: 'delegate',
-                    target: 'researcher',
-                    reasoning: 'Need to gather information first'
-                  }
-                }
-              }
-            },
-            {
-              type: 'delegation',
-              agent_id: 'researcher',
-              agent_name: 'Information Retriever',
-              timestamp: '2025-03-14T09:23:52Z',
-              step: 3,
-              input: { query: 'Find information about environmental impacts of electric vehicles' }
-            },
-            {
-              type: 'tool_execution',
-              agent_id: 'researcher',
-              agent_name: 'Information Retriever',
-              timestamp: '2025-03-14T09:24:05Z',
-              step: 4,
-              decision: {
-                tool_name: 'web_search',
-                tool_params: {
-                  query: 'environmental impacts electric vehicles battery production electricity sources'
-                }
-              },
-              output: {
-                results: [
-                  { title: 'Environmental Impact of EVs', snippet: 'Electric vehicles generally produce fewer emissions than conventional vehicles...' },
-                  { title: 'Battery Production Impact', snippet: 'The production of lithium-ion batteries can be energy-intensive...' }
-                ]
-              }
-            },
-            {
-              type: 'agent_execution',
-              agent_id: 'researcher',
-              agent_name: 'Information Retriever',
-              timestamp: '2025-03-14T09:24:32Z',
-              step: 5,
-              output: {
-                content: 'Based on my research, here are the key environmental impacts of electric vehicles...',
-                metadata: {
-                  decision: {
-                    action: 'delegate',
-                    target: 'analyst',
-                    reasoning: 'Need expert analysis of the information'
-                  }
-                }
-              }
-            },
-            {
-              type: 'delegation',
-              agent_id: 'analyst',
-              agent_name: 'Data Analyst',
-              timestamp: '2025-03-14T09:24:45Z',
-              step: 6,
-              input: { query: 'Analyze environmental impact data for electric vehicles' }
-            },
-            {
-              type: 'agent_execution',
-              agent_id: 'analyst',
-              agent_name: 'Data Analyst',
-              timestamp: '2025-03-14T09:25:10Z',
-              step: 7,
-              output: {
-                content: 'My analysis of the environmental impacts of electric vehicles shows...',
-                metadata: {
-                  decision: {
-                    action: 'final',
-                    reasoning: 'Analysis complete'
-                  }
-                }
-              }
-            }
-          ],
-          output: {
-            content: 'Electric vehicles (EVs) have several environmental impacts, both positive and negative:\n\n' +
-              '1. **Lower Operational Emissions**: EVs produce no tailpipe emissions, reducing air pollution in urban areas.\n\n' +
-              '2. **Overall Emissions Depend on Electricity Source**: The environmental benefit varies based on how clean the electricity grid is. In regions powered by renewables, EVs are much cleaner.\n\n' +
-              '3. **Battery Production**: Manufacturing EV batteries is energy-intensive and requires mining of materials like lithium, cobalt, and nickel, which has environmental impacts.\n\n' +
-              '4. **Lifecycle Assessment**: Studies show that even when accounting for battery production, EVs typically have a lower lifetime carbon footprint than gasoline vehicles.\n\n' +
-              '5. **Recycling Challenges**: Battery recycling infrastructure is still developing but will be crucial for sustainability.\n\n' +
-              'In conclusion, while EVs aren\'t perfect, they represent a significant environmental improvement over conventional vehicles, especially as electricity grids become cleaner.'
-          }
-        };
-
-        setExecution(mockExecution);
-
-        // Create visualization nodes and edges
-        const flowNodes = [];
-        const flowEdges = [];
-        let nodeMap = {};
+        // Fetch execution details
+        const response = await apiService.executions.getById(executionId);
+        setExecution(response.data);
         
-        // Create nodes for each agent
-        const agents = new Set();
-        mockExecution.execution_trace.forEach(item => {
-          if (item.agent_id && !agents.has(item.agent_id)) {
-            agents.add(item.agent_id);
-            flowNodes.push({
-              id: item.agent_id,
-              data: { label: item.agent_name },
-              position: { x: 0, y: 0 }, // Positions would be calculated properly in a real app
-              type: 'default'
-            });
-            nodeMap[item.agent_id] = flowNodes.length - 1;
+        // If execution has a flow_id, fetch flow details too
+        if (response.data.flow_id) {
+          try {
+            const flowResponse = await apiService.flows.getById(response.data.flow_id);
+            setFlowDetails(flowResponse.data);
+          } catch (flowError) {
+            console.error('Error fetching flow details:', flowError);
+            // Non-critical error, don't set main error state
           }
-        });
+        }
         
-        // Create edges based on delegations
-        let edgeId = 0;
-        mockExecution.execution_trace.forEach(item => {
-          if (item.type === 'delegation' && item.agent_id) {
-            const sourceId = mockExecution.execution_trace[item.step - 2]?.agent_id;
-            if (sourceId) {
-              flowEdges.push({
-                id: `edge-${edgeId++}`,
-                source: sourceId,
-                target: item.agent_id,
-                animated: true,
-                label: 'delegates'
-              });
-            }
-          }
-        });
-        
-        setNodes(flowNodes);
-        setEdges(flowEdges);
+        // Generate visualization nodes and edges
+        generateVisualization(response.data);
       } catch (error) {
-        console.error('Error fetching execution data:', error);
+        console.error('Error fetching execution:', error);
+        setError(error.response?.data?.detail || 'Failed to load execution data');
         toast({
-          title: 'Error loading execution data',
-          description: error.message,
+          title: 'Error',
+          description: 'Could not load execution data',
           status: 'error',
           duration: 5000,
           isClosable: true,
         });
-        navigate('/executions');
       } finally {
         setIsLoading(false);
       }
     };
 
     fetchExecutionData();
-  }, [executionId, navigate, toast]);
+  }, [executionId, toast]);
 
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'completed':
-        return 'green';
-      case 'failed':
-        return 'red';
-      case 'running':
-        return 'blue';
-      default:
-        return 'gray';
+  // Function to refresh execution data (for in-progress executions)
+  const refreshExecution = async () => {
+    setIsRefreshing(true);
+    
+    try {
+      const response = await apiService.executions.getById(executionId);
+      setExecution(response.data);
+      generateVisualization(response.data);
+      
+      toast({
+        title: 'Data refreshed',
+        status: 'success',
+        duration: 2000,
+        isClosable: true,
+      });
+    } catch (error) {
+      console.error('Error refreshing execution:', error);
+      toast({
+        title: 'Refresh failed',
+        description: error.response?.data?.detail || 'Could not refresh execution data',
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      });
+    } finally {
+      setIsRefreshing(false);
     }
   };
 
-  const getStatusIcon = (status) => {
-    switch (status) {
-      case 'completed':
-        return FiCheck;
-      case 'failed':
-        return FiX;
-      case 'running':
-        return FiClock;
-      default:
-        return FiAlertCircle;
+  // Generate visualization from execution trace
+  const generateVisualization = (executionData) => {
+    if (!executionData.execution_trace || executionData.execution_trace.length === 0) {
+      setNodes([]);
+      setEdges([]);
+      return;
     }
+    
+    const trace = executionData.execution_trace;
+    const flowNodes = [];
+    const flowEdges = [];
+    const nodeMap = {};
+    let nodePositions = {};
+    
+    // First pass: create nodes for each unique agent
+    const agents = new Set();
+    trace.forEach(item => {
+      if (item.agent_id && !agents.has(item.agent_id)) {
+        agents.add(item.agent_id);
+      }
+    });
+    
+    // Create node positions in a circular layout
+    const radius = 200;
+    const center = { x: 300, y: 300 };
+    let i = 0;
+    agents.forEach(agentId => {
+      const angle = (i / agents.size) * 2 * Math.PI;
+      nodePositions[agentId] = {
+        x: center.x + radius * Math.cos(angle),
+        y: center.y + radius * Math.sin(angle)
+      };
+      i++;
+    });
+    
+    // Create nodes
+    agents.forEach(agentId => {
+      // Find agent name from trace
+      const agentItem = trace.find(item => item.agent_id === agentId);
+      const agentName = agentItem ? agentItem.agent_name || agentId : agentId;
+      
+      flowNodes.push({
+        id: agentId,
+        data: { 
+          label: agentName,
+          type: 'agent'
+        },
+        position: nodePositions[agentId],
+        style: {
+          background: '#D6EAF8',
+          border: '1px solid #3498DB',
+          borderRadius: '5px',
+          padding: '10px',
+          width: 150,
+        }
+      });
+    });
+    
+    // Create start and end nodes
+    if (trace.length > 0) {
+      // Start node
+      flowNodes.push({
+        id: 'start',
+        data: { 
+          label: 'Start',
+          type: 'start'
+        },
+        position: { x: center.x, y: center.y - radius - 100 },
+        style: {
+          background: '#D5F5E3',
+          border: '1px solid #2ECC71',
+          borderRadius: '5px',
+          padding: '10px',
+          width: 100,
+        }
+      });
+      
+      // End node
+      flowNodes.push({
+        id: 'end',
+        data: { 
+          label: 'End',
+          type: 'end'
+        },
+        position: { x: center.x, y: center.y + radius + 100 },
+        style: {
+          background: '#FADBD8',
+          border: '1px solid #E74C3C',
+          borderRadius: '5px',
+          padding: '10px',
+          width: 100,
+        }
+      });
+      
+      // Connect start to first agent
+      const firstAgentId = trace.find(item => item.agent_id)?.agent_id;
+      if (firstAgentId) {
+        flowEdges.push({
+          id: `edge-start-${firstAgentId}`,
+          source: 'start',
+          target: firstAgentId,
+          animated: true,
+          style: { stroke: '#2ECC71' }
+        });
+      }
+    }
+    
+    // Second pass: create edges based on delegations
+    let edgeId = 0;
+    const delegations = trace.filter(item => item.type === 'delegation');
+    
+    delegations.forEach(delegation => {
+      // Find the previous step to determine source
+      const delegationStep = delegation.step || 0;
+      const previousStep = trace
+        .filter(item => (item.step || 0) < delegationStep && item.agent_id)
+        .sort((a, b) => (b.step || 0) - (a.step || 0))[0];
+      
+      if (previousStep && previousStep.agent_id && delegation.agent_id) {
+        flowEdges.push({
+          id: `edge-${edgeId++}`,
+          source: previousStep.agent_id,
+          target: delegation.agent_id,
+          animated: true,
+          label: 'delegates',
+          labelStyle: { fill: '#333', fontWeight: 700 },
+          style: { stroke: '#3498DB' }
+        });
+      }
+    });
+    
+    // Connect last agent to end node
+    if (trace.length > 0) {
+      const lastAgentId = trace
+        .filter(item => item.agent_id)
+        .sort((a, b) => (b.step || 0) - (a.step || 0))[0]?.agent_id;
+      
+      if (lastAgentId) {
+        flowEdges.push({
+          id: `edge-${lastAgentId}-end`,
+          source: lastAgentId,
+          target: 'end',
+          animated: true,
+          style: { stroke: '#E74C3C' }
+        });
+      }
+    }
+    
+    setNodes(flowNodes);
+    setEdges(flowEdges);
   };
 
-  const getStepIcon = (type) => {
-    switch (type) {
-      case 'agent_execution':
-        return FiCpu;
-      case 'delegation':
-        return FiSend;
-      case 'tool_execution':
-        return FiTool;
-      case 'start':
-        return FiInfo;
-      case 'complete':
-        return FiCheck;
-      default:
-        return FiInfo;
-    }
-  };
-
+  // Export execution results as JSON
   const handleExportResults = () => {
     if (!execution) return;
     
@@ -308,11 +320,59 @@ const ExecutionViewer = () => {
     });
   };
 
+  // Helper to get status color
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'completed': return 'green';
+      case 'failed': return 'red';
+      case 'running': return 'blue';
+      case 'pending': return 'orange';
+      default: return 'gray';
+    }
+  };
+
+  // Helper to get icon for status
+  const getStatusIcon = (status) => {
+    switch (status) {
+      case 'completed': return FiCheck;
+      case 'failed': return FiX;
+      case 'running': case 'pending': return FiClock;
+      default: return FiAlertCircle;
+    }
+  };
+
+  // Helper to get icon for step type
+  const getStepIcon = (type) => {
+    switch (type) {
+      case 'agent_execution': return FiCpu;
+      case 'delegation': return FiSend;
+      case 'tool_execution': return FiTool;
+      case 'start': return FiInfo;
+      case 'complete': return FiCheck;
+      default: return FiInfo;
+    }
+  };
+
   if (isLoading) {
     return (
       <Flex justify="center" align="center" height="500px">
         <Spinner size="xl" color="blue.500" />
       </Flex>
+    );
+  }
+
+  if (error) {
+    return (
+      <Box textAlign="center" py={10}>
+        <Alert status="error" borderRadius="md" maxW="xl" mx="auto">
+          <AlertIcon />
+          <AlertTitle>Error loading execution</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+        <Button mt={6} onClick={() => navigate('/executions')}>
+          Back to Executions
+        </Button>
+      </Box>
     );
   }
 
@@ -348,12 +408,25 @@ const ExecutionViewer = () => {
 
       <Flex justify="space-between" align="center" mb={6}>
         <Heading size="lg">Execution Details</Heading>
-        <Button 
-          leftIcon={<FiDownload />} 
-          onClick={handleExportResults}
-        >
-          Export Results
-        </Button>
+        <HStack>
+          {(execution.status === 'running' || execution.status === 'pending') && (
+            <Button 
+              leftIcon={<FiRefreshCw />} 
+              onClick={refreshExecution}
+              isLoading={isRefreshing}
+              loadingText="Refreshing"
+              mr={2}
+            >
+              Refresh
+            </Button>
+          )}
+          <Button 
+            leftIcon={<FiDownload />} 
+            onClick={handleExportResults}
+          >
+            Export Results
+          </Button>
+        </HStack>
       </Flex>
 
       {/* Execution Summary Card */}
@@ -361,30 +434,33 @@ const ExecutionViewer = () => {
         <CardBody>
           <Flex direction={{ base: 'column', md: 'row' }} justify="space-between">
             <VStack align="start" spacing={2} mb={{ base: 4, md: 0 }}>
-              <Heading size="md">{execution.flow_name}</Heading>
-              <HStack>
+              <Heading size="md">{execution.flow_name || flowDetails?.name || "Execution"}</Heading>
+              <HStack flexWrap="wrap">
                 <Badge colorScheme={getStatusColor(execution.status)} px={2} py={1}>
                   <Flex align="center">
                     <Icon as={getStatusIcon(execution.status)} mr={1} />
-                    {execution.status}
+                    {execution.status.toUpperCase()}
                   </Flex>
                 </Badge>
-                <Tag>Steps: {execution.steps}</Tag>
-                <Tag>Duration: {execution.duration}</Tag>
+                {execution.steps && <Tag>Steps: {execution.steps}</Tag>}
+                {execution.duration && <Tag>Duration: {execution.duration}</Tag>}
               </HStack>
             </VStack>
             
             <VStack align={{ base: 'start', md: 'end' }} spacing={1}>
               <Text fontSize="sm" color="gray.500">
-                Started at: {new Date(execution.started_at).toLocaleString()}
+                Started: {new Date(execution.started_at || execution.timestamp).toLocaleString()}
               </Text>
               {execution.completed_at && (
                 <Text fontSize="sm" color="gray.500">
-                  Completed at: {new Date(execution.completed_at).toLocaleString()}
+                  Completed: {new Date(execution.completed_at).toLocaleString()}
                 </Text>
               )}
               <Text fontSize="sm" color="gray.500">
-                Flow ID: {execution.flow_id}
+                Flow ID: {execution.flow_id || 'N/A'}
+              </Text>
+              <Text fontSize="sm" color="gray.500">
+                Execution ID: {execution.id || executionId}
               </Text>
             </VStack>
           </Flex>
@@ -407,7 +483,25 @@ const ExecutionViewer = () => {
                 <Heading size="md">Final Output</Heading>
               </CardHeader>
               <CardBody>
-                <Box whiteSpace="pre-wrap">{execution.output.content}</Box>
+                {(execution.status === 'completed' && execution.output) ? (
+                  <Box whiteSpace="pre-wrap">
+                    {typeof execution.output === 'object' && execution.output.content
+                      ? execution.output.content
+                      : JSON.stringify(execution.output, null, 2)}
+                  </Box>
+                ) : execution.status === 'failed' ? (
+                  <Alert status="error" borderRadius="md">
+                    <AlertIcon />
+                    <AlertTitle>Execution Failed</AlertTitle>
+                    <AlertDescription>
+                      {execution.error || 'No specific error message provided'}
+                    </AlertDescription>
+                  </Alert>
+                ) : (
+                  <Text color="gray.500">
+                    Execution is still in progress. Results will appear here when complete.
+                  </Text>
+                )}
               </CardBody>
             </Card>
           </TabPanel>
@@ -419,78 +513,88 @@ const ExecutionViewer = () => {
                 <Heading size="md">Execution Steps</Heading>
               </CardHeader>
               <CardBody>
-                <VStack spacing={4} align="stretch">
-                  {execution.execution_trace.map((step, index) => (
-                    <Box 
-                      key={index} 
-                      p={4} 
-                      borderWidth="1px" 
-                      borderRadius="md" 
-                      borderColor={borderColor}
-                    >
-                      <HStack mb={2}>
-                        <Badge>Step {step.step}</Badge>
-                        <Icon as={getStepIcon(step.type)} />
-                        <Text fontWeight="bold">{step.type}</Text>
-                        {step.agent_name && (
-                          <Tag colorScheme="blue">{step.agent_name}</Tag>
-                        )}
-                        <Text fontSize="sm" color="gray.500">
-                          {new Date(step.timestamp).toLocaleTimeString()}
-                        </Text>
-                      </HStack>
-                      
-                      {step.input && (
-                        <Box mt={2}>
-                          <Text fontWeight="bold" fontSize="sm">Input:</Text>
-                          <Code 
-                            p={2} 
-                            bg={codeBg} 
-                            borderRadius="md" 
-                            w="100%" 
-                            display="block"
-                          >
-                            {JSON.stringify(step.input, null, 2)}
-                          </Code>
-                        </Box>
-                      )}
+                {execution.execution_trace && execution.execution_trace.length > 0 ? (
+                  <Accordion allowMultiple defaultIndex={[0]}>
+                    {execution.execution_trace.map((step, index) => (
+                      <AccordionItem key={index}>
+                        <AccordionButton py={2}>
+                          <Box flex="1" textAlign="left">
+                            <HStack>
+                              <Badge>Step {step.step || index + 1}</Badge>
+                              <Icon as={getStepIcon(step.type)} />
+                              <Text fontWeight="bold">{step.type}</Text>
+                              {step.agent_name && (
+                                <Tag colorScheme="blue">{step.agent_name}</Tag>
+                              )}
+                              <Text fontSize="sm" color="gray.500">
+                                {new Date(step.timestamp).toLocaleTimeString()}
+                              </Text>
+                            </HStack>
+                          </Box>
+                          <AccordionIcon />
+                        </AccordionButton>
+                        <AccordionPanel pb={4}>
+                          <VStack align="stretch" spacing={3}>
+                            {step.input && (
+                              <Box mt={2}>
+                                <Text fontWeight="bold" fontSize="sm">Input:</Text>
+                                <Code 
+                                  p={2} 
+                                  bg={codeBg} 
+                                  borderRadius="md" 
+                                  w="100%" 
+                                  display="block"
+                                >
+                                  {typeof step.input === 'object' 
+                                    ? JSON.stringify(step.input, null, 2) 
+                                    : step.input}
+                                </Code>
+                              </Box>
+                            )}
 
-                      {step.decision && (
-                        <Box mt={2}>
-                          <Text fontWeight="bold" fontSize="sm">Decision:</Text>
-                          <Code 
-                            p={2} 
-                            bg={codeBg} 
-                            borderRadius="md" 
-                            w="100%" 
-                            display="block"
-                          >
-                            {JSON.stringify(step.decision, null, 2)}
-                          </Code>
-                        </Box>
-                      )}
-                      
-                      {step.output && (
-                        <Box mt={2}>
-                          <Text fontWeight="bold" fontSize="sm">Output:</Text>
-                          <Code 
-                            p={2} 
-                            bg={codeBg} 
-                            borderRadius="md" 
-                            w="100%" 
-                            display="block" 
-                            whiteSpace="pre-wrap"
-                          >
-                            {typeof step.output === 'object' 
-                              ? (step.output.content || JSON.stringify(step.output, null, 2))
-                              : step.output
-                            }
-                          </Code>
-                        </Box>
-                      )}
-                    </Box>
-                  ))}
-                </VStack>
+                            {step.decision && (
+                              <Box mt={2}>
+                                <Text fontWeight="bold" fontSize="sm">Decision:</Text>
+                                <Code 
+                                  p={2} 
+                                  bg={codeBg} 
+                                  borderRadius="md" 
+                                  w="100%" 
+                                  display="block"
+                                >
+                                  {typeof step.decision === 'object' 
+                                    ? JSON.stringify(step.decision, null, 2) 
+                                    : step.decision}
+                                </Code>
+                              </Box>
+                            )}
+                            
+                            {step.output && (
+                              <Box mt={2}>
+                                <Text fontWeight="bold" fontSize="sm">Output:</Text>
+                                <Code 
+                                  p={2} 
+                                  bg={codeBg} 
+                                  borderRadius="md" 
+                                  w="100%" 
+                                  display="block" 
+                                  whiteSpace="pre-wrap"
+                                >
+                                  {typeof step.output === 'object' 
+                                    ? (step.output.content || JSON.stringify(step.output, null, 2))
+                                    : step.output
+                                  }
+                                </Code>
+                              </Box>
+                            )}
+                          </VStack>
+                        </AccordionPanel>
+                      </AccordionItem>
+                    ))}
+                  </Accordion>
+                ) : (
+                  <Text color="gray.500">No execution trace available.</Text>
+                )}
               </CardBody>
             </Card>
           </TabPanel>
@@ -502,16 +606,22 @@ const ExecutionViewer = () => {
                 <Heading size="md">Flow Visualization</Heading>
               </CardHeader>
               <CardBody>
-                <Box h="500px">
-                  <ReactFlow
-                    nodes={nodes}
-                    edges={edges}
-                    fitView
-                  >
-                    <Controls />
-                    <Background />
-                  </ReactFlow>
-                </Box>
+                {nodes.length > 0 ? (
+                  <Box h="500px">
+                    <ReactFlow
+                      nodes={nodes}
+                      edges={edges}
+                      fitView
+                    >
+                      <Controls />
+                      <Background />
+                    </ReactFlow>
+                  </Box>
+                ) : (
+                  <Flex justify="center" align="center" h="100%">
+                    <Text color="gray.500">No visualization data available</Text>
+                  </Flex>
+                )}
               </CardBody>
             </Card>
           </TabPanel>
