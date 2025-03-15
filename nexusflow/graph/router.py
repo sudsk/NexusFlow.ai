@@ -5,7 +5,7 @@ This module provides the GraphRouter class, which handles routing decisions
 within a dynamic execution graph based on node outputs and edge conditions.
 """
 
-from typing import Dict, List, Any, Optional, Union, Callable, Awaitable
+from typing import Dict, List, Any, Optional, Union, Callable, Awaitable, Set
 import logging
 import asyncio
 
