@@ -55,6 +55,51 @@ flows_db = {}
 executions_db = {}
 deployments_db = {}
 
+def validate_api_key(api_key: str):
+    """
+    Validate API key
+    
+    Args:
+        api_key: API key
+        
+    Returns:
+        API key if valid
+        
+    Raises:
+        HTTPException: If API key is invalid
+    """
+    # For development, accept any non-empty key
+    if not api_key:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="API key is required"
+        )
+    
+    # Check for API key format
+    if not api_key.startswith("Bearer "):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid API key format. Must start with 'Bearer '"
+        )
+    
+    # Extract key
+    key = api_key.replace("Bearer ", "")
+    
+    # Check if key is valid
+    valid_deployment_id = None
+    for deployment_id, deployment in deployments_db.items():
+        if deployment["api_key"] == key and deployment["status"] == "active":
+            valid_deployment_id = deployment_id
+            break
+    
+    if not valid_deployment_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid API key"
+        )
+    
+    return key
+    
 #
 # Flow execution endpoint
 #
@@ -871,40 +916,4 @@ async def send_webhook_notifications(
     except Exception as e:
         logger.exception(f"Error sending webhook notifications: {str(e)}")
 
-def validate_api_key(api_key: str):
-    """
-    Validate API key
-    
-    Args:
-        api_key: API key
-        
-    Returns:
-        API key if valid
-        
-    Raises:
-        HTTPException: If API key is invalid
-    """
-    # Check for API key format
-    if not api_key.startswith("Bearer "):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid API key format. Must start with 'Bearer '"
-        )
-    
-    # Extract key
-    key = api_key.replace("Bearer ", "")
-    
-    # Check if key is valid
-    valid_deployment_id = None
-    for deployment_id, deployment in deployments_db.items():
-        if deployment["api_key"] == key and deployment["status"] == "active":
-            valid_deployment_id = deployment_id
-            break
-    
-    if not valid_deployment_id:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid API key"
-        )
-    
-    return key
+
