@@ -25,6 +25,7 @@ import AgentNode from './AgentNode';
 import AgentConfigEditor from './AgentConfigEditor';
 import NodePropertiesPanel from './NodePropertiesPanel';
 import FlowPropertiesPanel from './FlowPropertiesPanel';
+import apiService from '../services/api'
 
 // Define custom node types
 const nodeTypes = {
