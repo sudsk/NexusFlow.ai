@@ -8,65 +8,59 @@ This package contains integrations with various LLM providers:
 - Vertex AI: Integration with Google's Vertex AI platform
 """
 
-# Import once implemented
-# from nexusflow.llm.provider import LLMProvider, LLMResponse
-# from nexusflow.llm.openai import OpenAIProvider
-# from nexusflow.llm.anthropic import AnthropicProvider
-# from nexusflow.llm.vertex import VertexAIProvider
+from nexusflow.llm.provider import (
+    LLMProvider, 
+    LLMResponse, 
+    Message, 
+    Tool, 
+    ProviderManager, 
+    provider_manager
+)
+from nexusflow.llm.openai import OpenAIProvider, register_openai_provider
+from nexusflow.llm.anthropic import AnthropicProvider, register_anthropic_provider
+from nexusflow.llm.vertexai import VertexAIProvider, register_vertex_ai_provider
 
-# Create placeholder provider interface
-class LLMProvider:
-    """Base interface for LLM providers"""
-    
-    async def generate(self, prompt, **kwargs):
-        """Generate a response to a prompt"""
-        return "This is a placeholder response from the mock LLM provider."
+# Register default providers based on environment variables
+import os
 
-class LLMResponse:
-    """Response from an LLM"""
-    
-    def __init__(self, content, model=None, usage=None):
-        self.content = content
-        self.model = model
-        self.usage = usage or {}
+# Register OpenAI provider if API key is available
+if os.environ.get("OPENAI_API_KEY"):
+    try:
+        register_openai_provider(make_default=True)
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"Failed to register OpenAI provider: {str(e)}")
 
-# Create a provider manager that will be populated later
-class ProviderManager:
-    """Manager for LLM providers"""
-    
-    def __init__(self):
-        self.providers = {}
-    
-    def register_provider(self, name, provider):
-        """Register a provider"""
-        self.providers[name] = provider
-    
-    def get_provider(self, name):
-        """Get a provider by name"""
-        return self.providers.get(name)
-    
-    async def generate(self, provider_name, prompt, **kwargs):
-        """Generate using a specific provider"""
-        provider = self.get_provider(provider_name)
-        if not provider:
-            raise ValueError(f"Provider '{provider_name}' not found")
-        return await provider.generate(prompt, **kwargs)
+# Register Anthropic provider if API key is available
+if os.environ.get("ANTHROPIC_API_KEY"):
+    try:
+        register_anthropic_provider(make_default=False)
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"Failed to register Anthropic provider: {str(e)}")
 
-# Create a singleton instance
-provider_manager = ProviderManager()
-
-# Register a mock provider
-provider_manager.register_provider("mock", LLMProvider())
+# Register Vertex AI provider if project ID is available
+if os.environ.get("GOOGLE_CLOUD_PROJECT"):
+    try:
+        register_vertex_ai_provider(make_default=False)
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"Failed to register Vertex AI provider: {str(e)}")
 
 __all__ = [
     # Provider components
     'LLMProvider',
     'LLMResponse',
+    'Message',
+    'Tool',
     'ProviderManager',
     'provider_manager',
     
-    # These would be added once implemented
-    # 'OpenAIProvider',
-    # 'AnthropicProvider',
-    # 'VertexAIProvider',
+    # Provider implementations
+    'OpenAIProvider',
+    'register_openai_provider',
+    'AnthropicProvider',
+    'register_anthropic_provider',
+    'VertexAIProvider',
+    'register_vertex_ai_provider',
 ]
