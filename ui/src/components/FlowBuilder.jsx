@@ -20,13 +20,30 @@ import {
   Text,
   Flex,
   useDisclosure,
+  Spinner,
+  Modal,
+  ModalOverlay,
+  ModalContent,
+  ModalHeader,
+  ModalBody,
+  ModalCloseButton,
+  ModalFooter,
+  Select,
+  FormControl,
+  FormLabel,
+  NumberInput,
+  NumberInputField,
+  NumberInputStepper,
+  NumberIncrementStepper,
+  NumberDecrementStepper,
 } from '@chakra-ui/react';
-import { FiSave, FiPlay, FiPlus, FiTrash2, FiLink, FiUnlink } from 'react-icons/fi';
+import { FiSave, FiPlay, FiPlus, FiTrash2, FiLink, FiSettings } from 'react-icons/fi';
 import AgentNode from './AgentNode';
 import AgentConfigEditor from './AgentConfigEditor';
 import NodePropertiesPanel from './NodePropertiesPanel';
 import FlowPropertiesPanel from './FlowPropertiesPanel';
-import apiService from '../services/api'
+import FlowTestConsole from './FlowTestConsole';
+import apiService from '../services/api';
 
 // Define custom node types
 const nodeTypes = {
@@ -41,8 +58,12 @@ const FlowBuilder = ({ flowId, initialData, onSave }) => {
   const [reactFlowInstance, setReactFlowInstance] = useState(null);
   const [flowName, setFlowName] = useState('Untitled Flow');
   const [flowDescription, setFlowDescription] = useState('');
+  const [maxSteps, setMaxSteps] = useState(10);
   const [selectedNode, setSelectedNode] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [availableCapabilities, setAvailableCapabilities] = useState([]);
+  const [availableTools, setAvailableTools] = useState([]);
   
   const {
     isOpen: isConfigEditorOpen,
@@ -50,13 +71,86 @@ const FlowBuilder = ({ flowId, initialData, onSave }) => {
     onClose: onConfigEditorClose,
   } = useDisclosure();
 
+  const {
+    isOpen: isTestConsoleOpen,
+    onOpen: onTestConsoleOpen,
+    onClose: onTestConsoleClose,
+  } = useDisclosure();
+
+  const {
+    isOpen: isSettingsOpen,
+    onOpen: onSettingsOpen,
+    onClose: onSettingsClose,
+  } = useDisclosure();
+
+  // Fetch capabilities and tools on mount
+  useEffect(() => {
+    const fetchCapabilitiesAndTools = async () => {
+      try {
+        // Fetch capabilities
+        const capabilitiesResponse = await apiService.capabilities.getAll();
+        setAvailableCapabilities(capabilitiesResponse.data || []);
+
+        // For tools, we could either fetch from a dedicated endpoint or extract from existing tools
+        // Using mock data for now
+        setAvailableTools([
+          { name: 'web_search', description: 'Search the web for information' },
+          { name: 'data_analysis', description: 'Analyze data and generate insights' },
+          { name: 'code_execution', description: 'Execute code in a secure sandbox' },
+        ]);
+      } catch (error) {
+        console.error('Error fetching capabilities and tools:', error);
+      }
+    };
+
+    fetchCapabilitiesAndTools();
+  }, []);
+
   // Load initial data if provided
   useEffect(() => {
     if (initialData) {
-      if (initialData.nodes) setNodes(initialData.nodes);
-      if (initialData.edges) setEdges(initialData.edges);
+      // If this is an existing flow, load its configuration
+      if (initialData.nodes && initialData.edges) {
+        // Visual flow representation already provided
+        setNodes(initialData.nodes);
+        setEdges(initialData.edges);
+      } else if (initialData.config && initialData.config.agents) {
+        // Convert backend format to visual nodes and edges
+        const newNodes = initialData.config.agents.map((agent, index) => ({
+          id: agent.agent_id || `agent-${Date.now()}-${index}`,
+          type: 'agent',
+          position: { x: 100 + (index * 250), y: 100 + (index * 50) },
+          data: {
+            label: agent.name,
+            capabilities: agent.capabilities || [],
+            model: `${agent.model_provider}/${agent.model_name}`,
+            systemMessage: agent.system_message || '',
+            temperature: agent.temperature || 0.7,
+            toolNames: agent.tool_names || [],
+          },
+        }));
+        setNodes(newNodes);
+
+        // Create default edges if there are multiple agents
+        if (newNodes.length > 1) {
+          const newEdges = [];
+          for (let i = 0; i < newNodes.length - 1; i++) {
+            newEdges.push({
+              id: `edge-${i}`,
+              source: newNodes[i].id,
+              target: newNodes[i + 1].id,
+              animated: true,
+            });
+          }
+          setEdges(newEdges);
+        }
+      }
+      
       if (initialData.name) setFlowName(initialData.name);
       if (initialData.description) setFlowDescription(initialData.description);
+      if (initialData.max_steps || initialData.config?.max_steps) {
+        setMaxSteps(initialData.max_steps || initialData.config?.max_steps);
+      }
     }
   }, [initialData, setNodes, setEdges]);
 
@@ -95,8 +189,9 @@ const FlowBuilder = ({ flowId, initialData, onSave }) => {
           label: `New ${agentType}`,
           agentType,
           capabilities: [],
-          model: 'gpt-4',
+          model: 'openai/gpt-4',
           temperature: 0.7,
+          systemMessage: '',
           toolNames: [],
         },
       };
@@ -120,6 +215,21 @@ const FlowBuilder = ({ flowId, initialData, onSave }) => {
     }
   }, [selectedNode, setNodes, setEdges]);
 
+  // Format agent configuration for backend
+  const formatAgentConfig = (node) => {
+    return {
+      name: node.data.label,
+      agent_id: node.id.startsWith('agent-') ? undefined : node.id, // Only include if it's a valid ID
+      capabilities: node.data.capabilities || [],
+      model_provider: node.data.model ? node.data.model.split('/')[0] : 'openai',
+      model_name: node.data.model ? node.data.model.split('/')[1] : 'gpt-4',
+      system_message: node.data.systemMessage || '',
+      temperature: node.data.temperature || 0.7,
+      tool_names: node.data.toolNames || [],
+      can_delegate: true
+    };
+  };
+
   const handleSaveFlow = useCallback(async () => {
     if (!flowName.trim()) {
       toast({
@@ -132,33 +242,41 @@ const FlowBuilder = ({ flowId, initialData, onSave }) => {
       return;
     }
 
-    // Convert flow structure to NexusFlow format
-    const agentConfigs = nodes
-      .filter(node => node.type === 'agent')
-      .map(node => ({
-        name: node.data.label,
-        capabilities: node.data.capabilities,
-        model_provider: node.data.model.split('/')[0] || 'openai',
-        model_name: node.data.model.split('/')[1] || 'gpt-4',
-        system_message: node.data.systemMessage,
-        temperature: node.data.temperature,
-        tool_names: node.data.toolNames,
-        can_delegate: true
-      }));
+    // Check if there are any agents
+    const agentNodes = nodes.filter(node => node.type === 'agent');
+    if (agentNodes.length === 0) {
+      toast({
+        title: 'No agents defined',
+        description: 'Your flow must contain at least one agent',
+        status: 'warning',
+        duration: 3000,
+        isClosable: true,
+      });
+      return;
+    }
 
+    // Convert agent nodes to backend configuration format
+    const agentConfigs = agentNodes.map(formatAgentConfig);
+
+    // Build complete flow configuration
     const flowConfig = {
       name: flowName,
       description: flowDescription,
       agents: agentConfigs,
-      max_steps: 10, // Default, could be made configurable
-      tools: {} // Default, could be populated based on selected tools
+      max_steps: maxSteps,
+      tools: {} // In a real implementation, we would build the tool configurations here
     };
 
-    setIsLoading(true);
+    setIsSaving(true);
     try {
-      const response = flowId
-        ? await apiService.flows.update(flowId, flowConfig)
-        : await apiService.flows.create(flowConfig);
+      let response;
+      if (flowId) {
+        // Update existing flow
+        response = await apiService.flows.update(flowId, { flow_config: flowConfig });
+      } else {
+        // Create new flow
+        response = await apiService.flows.create({ flow_config: flowConfig });
+      }
       
       toast({
         title: 'Success',
@@ -169,9 +287,10 @@ const FlowBuilder = ({ flowId, initialData, onSave }) => {
       });
       
       if (onSave) {
-        onSave(response.data.flow_id, flowConfig);
+        onSave(response.data.id || response.data.flow_id, flowConfig);
       }
     } catch (error) {
+      console.error('Error saving flow:', error);
       toast({
         title: 'Error',
         description: error.response?.data?.detail || 'Failed to save flow',
@@ -180,9 +299,9 @@ const FlowBuilder = ({ flowId, initialData, onSave }) => {
         isClosable: true,
       });
     } finally {
-      setIsLoading(false);
+      setIsSaving(false);
     }
-  }, [flowId, flowName, flowDescription, nodes, toast, onSave]);
+  }, [flowId, flowName, flowDescription, nodes, maxSteps, toast, onSave]);
 
   const handleNodeConfigChange = useCallback((nodeId, newConfig) => {
     setNodes((nds) =>
@@ -201,23 +320,23 @@ const FlowBuilder = ({ flowId, initialData, onSave }) => {
     );
   }, [setNodes]);
 
-  const handleTestFlow = useCallback(async () => {
-    // Simple test with a default query
-    const testQuery = 'What is the capital of France?';
-    toast({
-      title: 'Testing flow',
-      description: `Running test with query: "${testQuery}"`,
-      status: 'info',
-      duration: 3000,
-      isClosable: true,
-    });
+  // Generate flow configuration for testing
+  const getFlowConfig = useCallback(() => {
+    const agentNodes = nodes.filter(node => node.type === 'agent');
+    const agentConfigs = agentNodes.map(formatAgentConfig);
     
-    // In a real implementation, this would open a test panel or redirect to the test page
-  }, [toast]);
+    return {
+      name: flowName,
+      description: flowDescription,
+      agents: agentConfigs,
+      max_steps: maxSteps,
+      tools: {} // Would be populated in a real implementation
+    };
+  }, [flowName, flowDescription, nodes, maxSteps]);
 
   return (
     <ReactFlowProvider>
-      <Box h="calc(100vh - 80px)" position="relative">
+      <Box h="calc(100vh - 160px)" position="relative">
         <Flex h="full">
           <Box
             ref={reactFlowWrapper}
@@ -249,17 +368,22 @@ const FlowBuilder = ({ flowId, initialData, onSave }) => {
                     leftIcon={<FiSave />}
                     colorScheme="blue"
                     onClick={handleSaveFlow}
-                    isLoading={isLoading}
+                    isLoading={isSaving}
                   >
                     Save
                   </Button>
                   <Button
                     leftIcon={<FiPlay />}
                     colorScheme="green"
-                    onClick={handleTestFlow}
+                    onClick={onTestConsoleOpen}
                   >
                     Test
                   </Button>
+                  <IconButton
+                    icon={<FiSettings />}
+                    aria-label="Flow settings"
+                    onClick={onSettingsOpen}
+                  />
                 </HStack>
               </Panel>
               
@@ -290,19 +414,24 @@ const FlowBuilder = ({ flowId, initialData, onSave }) => {
               <NodePropertiesPanel
                 node={selectedNode}
                 onChange={(newConfig) => handleNodeConfigChange(selectedNode.id, newConfig)}
+                capabilities={availableCapabilities}
+                tools={availableTools}
               />
             ) : (
               <FlowPropertiesPanel
                 name={flowName}
                 description={flowDescription}
+                maxSteps={maxSteps}
                 onNameChange={setFlowName}
                 onDescriptionChange={setFlowDescription}
+                onMaxStepsChange={setMaxSteps}
               />
             )}
           </VStack>
         </Flex>
       </Box>
       
+      {/* Agent Config Editor Modal */}
       {isConfigEditorOpen && selectedNode && (
         <AgentConfigEditor
           isOpen={isConfigEditorOpen}
@@ -314,6 +443,67 @@ const FlowBuilder = ({ flowId, initialData, onSave }) => {
           }}
         />
       )}
+
+      {/* Flow Settings Modal */}
+      <Modal isOpen={isSettingsOpen} onClose={onSettingsClose}>
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>Flow Settings</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody>
+            <VStack spacing={4} align="stretch">
+              <FormControl>
+                <FormLabel>Maximum Execution Steps</FormLabel>
+                <NumberInput
+                  value={maxSteps}
+                  onChange={(_, val) => setMaxSteps(val)}
+                  min={1}
+                  max={50}
+                >
+                  <NumberInputField />
+                  <NumberInputStepper>
+                    <NumberIncrementStepper />
+                    <NumberDecrementStepper />
+                  </NumberInputStepper>
+                </NumberInput>
+              </FormControl>
+              <FormControl>
+                <FormLabel>Default Tool Timeout (seconds)</FormLabel>
+                <NumberInput defaultValue={30} min={1} max={300}>
+                  <NumberInputField />
+                  <NumberInputStepper>
+                    <NumberIncrementStepper />
+                    <NumberDecrementStepper />
+                  </NumberInputStepper>
+                </NumberInput>
+              </FormControl>
+            </VStack>
+          </ModalBody>
+          <ModalFooter>
+            <Button colorScheme="blue" mr={3} onClick={onSettingsClose}>
+              Save Settings
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+
+      {/* Test Console Modal */}
+      <Modal isOpen={isTestConsoleOpen} onClose={onTestConsoleClose} size="xl">
+        <ModalOverlay />
+        <ModalContent maxWidth="80vw">
+          <ModalHeader>Test Flow</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody>
+            <FlowTestConsole 
+              flowId={flowId} 
+              flowConfig={getFlowConfig()} 
+            />
+          </ModalBody>
+          <ModalFooter>
+            <Button onClick={onTestConsoleClose}>Close</Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
     </ReactFlowProvider>
   );
 };
