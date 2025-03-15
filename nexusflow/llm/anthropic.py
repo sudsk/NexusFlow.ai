@@ -221,3 +221,62 @@ class AnthropicProvider(LLMProvider):
             }
             
             if tool_calls:
+                metadata["tool_calls"] = tool_calls
+            
+            return LLMResponse(
+                content=content,
+                model=response.model,
+                provider=self.provider_name,
+                usage=usage,
+                metadata=metadata
+            )
+            
+        except Exception as e:
+            logger.exception(f"Error generating response from Anthropic: {str(e)}")
+            return self._format_error_response(e)
+    
+    async def get_available_models(self) -> List[Dict[str, Any]]:
+        """
+        Get a list of available models from Anthropic
+        
+        Returns:
+            List of model information dictionaries
+        """
+        # Anthropic doesn't have a models endpoint in their API
+        # Use the predefined list of models
+        return self.available_models
+    
+    def _convert_tools_format(self, tools: List[Tool]) -> List[Dict[str, Any]]:
+        """
+        Convert tools to Anthropic format
+        
+        Args:
+            tools: List of tools
+            
+        Returns:
+            Anthropic-specific tools format
+        """
+        anthropic_tools = []
+        
+        for tool in tools:
+            anthropic_tools.append({
+                "name": tool.name,
+                "description": tool.description,
+                "input_schema": tool.parameters
+            })
+        
+        return anthropic_tools
+
+# Register provider
+def register_anthropic_provider(api_key: Optional[str] = None, make_default: bool = False):
+    """
+    Register Anthropic provider with the provider manager
+    
+    Args:
+        api_key: Anthropic API key (uses ANTHROPIC_API_KEY env var if not provided)
+        make_default: Whether to make this the default provider
+    """
+    provider = AnthropicProvider(api_key=api_key)
+    provider_manager.register_provider(provider, make_default=make_default)
+    
+    return provider
