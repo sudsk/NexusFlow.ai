@@ -35,9 +35,8 @@ const getCapabilityIcon = (capability) => {
 
 const AgentNode = ({ data, isConnectable, selected }) => {
   const bgColor = useColorModeValue('white', 'gray.700');
-  const borderColor = selected 
-    ? 'brand.500' 
-    : useColorModeValue('gray.200', 'gray.600');
+  const borderColorBase = useColorModeValue('gray.200', 'gray.600');
+  const borderColor = selected ? 'brand.500' : borderColorBase;
   const shadowColor = useColorModeValue('rgba(0, 0, 0, 0.1)', 'rgba(0, 0, 0, 0.4)');
   
   // Determine primary capability (first in the list or reasoning as default)
