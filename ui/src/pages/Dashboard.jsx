@@ -49,7 +49,6 @@ import {
   BarChart,
   Bar,
 } from 'recharts';
-import axios from 'axios';
 
 const Dashboard = () => {
   const navigate = useNavigate();
