@@ -8,33 +8,27 @@ This package contains tools that agents can use:
 - Data Analysis: Analyze data and generate insights
 """
 
-# Import once implemented
-# from nexusflow.tools.registry import ToolRegistry, tool_registry
-# from nexusflow.tools.web_search import WebSearchTool
-# from nexusflow.tools.code_execution import CodeExecutionTool
-# from nexusflow.tools.data_analysis import DataAnalysisTool
-
-# Create empty tool registry for now
-class ToolRegistry:
-    """Placeholder for the tool registry"""
-    def register_tool(self, *args, **kwargs):
-        pass
-    
-    def get_tool(self, *args, **kwargs):
-        return None
-    
-    def list_tools(self):
-        return []
-
-tool_registry = ToolRegistry()
+from nexusflow.tools.registry import ToolRegistry, ToolDefinition, ToolResult, tool_registry
+from nexusflow.tools.web_search import WebSearchTool, web_search_tool
+from nexusflow.tools.code_execution import CodeExecutionTool, code_execution_tool
+from nexusflow.tools.data_analysis import DataAnalysisTool, data_analysis_tool
 
 __all__ = [
     # Tool registry
     'ToolRegistry',
+    'ToolDefinition',
+    'ToolResult',
     'tool_registry',
     
-    # These would be added once implemented
-    # 'WebSearchTool',
-    # 'CodeExecutionTool',
-    # 'DataAnalysisTool',
+    # Web search tool
+    'WebSearchTool',
+    'web_search_tool',
+    
+    # Code execution tool
+    'CodeExecutionTool',
+    'code_execution_tool',
+    
+    # Data analysis tool
+    'DataAnalysisTool',
+    'data_analysis_tool',
 ]
