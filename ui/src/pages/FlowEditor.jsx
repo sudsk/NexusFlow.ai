@@ -19,7 +19,7 @@ import {
 import { FiHome, FiActivity, FiCpu, FiDatabase, FiCode, FiSearch } from 'react-icons/fi';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import FlowBuilder from '../components/FlowBuilder';
-import axios from 'axios';
+import apiService from '../services/api';
 
 const FlowEditor = () => {
   const { flowId } = useParams();
@@ -35,7 +35,7 @@ const FlowEditor = () => {
       const fetchFlowData = async () => {
         setIsLoading(true);
         try {
-          const response = await axios.get(`/api/nexusflow/flows/${flowId}`);
+          const response = await apiService.flows.getById(flowId);
           setFlowData(response.data);
         } catch (error) {
           toast({
