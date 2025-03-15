@@ -14,9 +14,8 @@ from nexusflow.graph.builder import (
     GraphEdge
 )
 
-# These would be imported once implemented
-# from nexusflow.graph.router import GraphRouter
-# from nexusflow.graph.execution import GraphExecutionEngine
+from nexusflow.graph.router import GraphRouter
+from nexusflow.graph.execution import GraphExecutionEngine, ExecutionResult
 
 __all__ = [
     # Graph components
@@ -25,7 +24,10 @@ __all__ = [
     'GraphNode',
     'GraphEdge',
     
-    # These would be added once implemented
-    # 'GraphRouter',
-    # 'GraphExecutionEngine',
+    # Router components
+    'GraphRouter',
+    
+    # Execution components
+    'GraphExecutionEngine',
+    'ExecutionResult',
 ]
