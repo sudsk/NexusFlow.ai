@@ -247,3 +247,286 @@ const FlowVisualization = ({ executionTrace, flowId }) => {
         connections,
         layoutType
       );
+      
+      // Create ReactFlow nodes
+      const flowNodes = [];
+      
+      // Add start node
+      flowNodes.push({
+        id: startNode.id,
+        data: { label: startNode.name },
+        position: positions[startNode.id] || { x: 50, y: 50 },
+        style: nodeStyles.start,
+      });
+      
+      // Add end node
+      flowNodes.push({
+        id: endNode.id,
+        data: { label: endNode.name },
+        position: positions[endNode.id] || { x: 50, y: 400 },
+        style: nodeStyles.end,
+      });
+      
+      // Add agent nodes
+      agentNodes.forEach((agent) => {
+        flowNodes.push({
+          id: agent.id,
+          data: { 
+            label: agent.name,
+            steps: agent.steps.join(', ')
+          },
+          position: positions[agent.id] || { x: 200, y: 200 },
+          style: nodeStyles.agent,
+        });
+      });
+      
+      // Add tool nodes
+      toolNodes.forEach((tool) => {
+        flowNodes.push({
+          id: tool.id,
+          data: { 
+            label: `${tool.name} (Step ${tool.step})`,
+            params: JSON.stringify(tool.params, null, 2)
+          },
+          position: positions[tool.id] || { x: 400, y: 200 },
+          style: nodeStyles.tool,
+        });
+      });
+      
+      // Create ReactFlow edges
+      const flowEdges = connections.map((conn, index) => {
+        const edgeStyle = edgeStyles[conn.type] || edgeStyles.default;
+        
+        return {
+          id: `edge-${conn.source}-${conn.target}-${index}`,
+          source: conn.source,
+          target: conn.target,
+          animated: true,
+          label: getEdgeLabel(conn.type),
+          style: edgeStyle,
+          type: 'default' // Can be 'default', 'step', etc.
+        };
+      });
+      
+      // Sort connections by step order
+      flowEdges.sort((a, b) => {
+        const aConn = connections.find(c => `edge-${c.source}-${c.target}` === a.id);
+        const bConn = connections.find(c => `edge-${c.source}-${c.target}` === b.id);
+        return (aConn?.stepOrder || 0) - (bConn?.stepOrder || 0);
+      });
+      
+      // Set nodes and edges
+      setNodes(flowNodes);
+      setEdges(flowEdges);
+    } catch (error) {
+      console.error('Error generating flow visualization:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
+  // Helper to calculate node positions based on layout algorithm
+  const calculateNodePositions = (nodes, connections, layout) => {
+    const positions = {};
+    
+    // Simple positioning algorithm - this would be replaced with a proper layout algorithm in production
+    if (layout === 'horizontal') {
+      // Horizontal layout
+      const agentNodes = nodes.filter(n => n.type === 'agent');
+      const toolNodes = nodes.filter(n => n.type === 'tool');
+      
+      // Position start node
+      positions['start'] = { x: 50, y: 200 };
+      
+      // Position agent nodes in a horizontal line
+      agentNodes.forEach((node, index) => {
+        positions[node.id] = { x: 200 + (index * 200), y: 200 };
+      });
+      
+      // Position tool nodes below their respective agents
+      toolNodes.forEach(node => {
+        // Find associated agent
+        const agentConn = connections.find(c => c.target === node.id);
+        if (agentConn && positions[agentConn.source]) {
+          const agentPos = positions[agentConn.source];
+          positions[node.id] = { x: agentPos.x, y: agentPos.y + 150 };
+        } else {
+          // Default position if no connection found
+          positions[node.id] = { x: 400, y: 350 };
+        }
+      });
+      
+      // Position end node
+      const lastAgentNode = agentNodes[agentNodes.length - 1];
+      positions['end'] = { x: (lastAgentNode ? positions[lastAgentNode.id].x + 200 : 600), y: 200 };
+    } else if (layout === 'vertical') {
+      // Vertical layout
+      const agentNodes = nodes.filter(n => n.type === 'agent');
+      const toolNodes = nodes.filter(n => n.type === 'tool');
+      
+      // Position start node
+      positions['start'] = { x: 300, y: 50 };
+      
+      // Position agent nodes in a vertical line
+      agentNodes.forEach((node, index) => {
+        positions[node.id] = { x: 300, y: 150 + (index * 150) };
+      });
+      
+      // Position tool nodes to the right of their respective agents
+      toolNodes.forEach(node => {
+        // Find associated agent
+        const agentConn = connections.find(c => c.target === node.id);
+        if (agentConn && positions[agentConn.source]) {
+          const agentPos = positions[agentConn.source];
+          positions[node.id] = { x: agentPos.x + 300, y: agentPos.y };
+        } else {
+          // Default position if no connection found
+          positions[node.id] = { x: 600, y: 300 };
+        }
+      });
+      
+      // Position end node
+      const lastAgentNode = agentNodes[agentNodes.length - 1];
+      positions['end'] = { x: 300, y: (lastAgentNode ? positions[lastAgentNode.id].y + 150 : 600) };
+    } else {
+      // Default dagre-like layout (simple implementation)
+      const nodesByLevel = {};
+      const levelHeight = 120;
+      const levelWidth = 250;
+      
+      // Start with start node at level 0
+      nodesByLevel[0] = ['start'];
+      positions['start'] = { x: 300, y: 50 };
+      
+      // Assign levels to each node based on connections
+      let maxLevel = 0;
+      let processed = new Set(['start']);
+      
+      // Depth-first traversal to assign levels
+      const assignLevels = (nodeId, level) => {
+        if (!nodesByLevel[level]) {
+          nodesByLevel[level] = [];
+        }
+        
+        if (!nodesByLevel[level].includes(nodeId)) {
+          nodesByLevel[level].push(nodeId);
+        }
+        
+        maxLevel = Math.max(maxLevel, level);
+        processed.add(nodeId);
+        
+        // Find outgoing connections
+        const outgoing = connections.filter(c => c.source === nodeId);
+        
+        outgoing.forEach(conn => {
+          if (!processed.has(conn.target)) {
+            assignLevels(conn.target, level + 1);
+          }
+        });
+      };
+      
+      assignLevels('start', 0);
+      
+      // Handle any unprocessed nodes
+      nodes.forEach(node => {
+        if (!processed.has(node.id)) {
+          const level = maxLevel + 1;
+          if (!nodesByLevel[level]) {
+            nodesByLevel[level] = [];
+          }
+          nodesByLevel[level].push(node.id);
+          maxLevel = level;
+        }
+      });
+      
+      // Position nodes by level
+      Object.entries(nodesByLevel).forEach(([level, nodeIds]) => {
+        const numNodesInLevel = nodeIds.length;
+        nodeIds.forEach((nodeId, index) => {
+          const xPos = ((index + 1) * levelWidth) / (numNodesInLevel + 1);
+          positions[nodeId] = { 
+            x: xPos, 
+            y: parseInt(level) * levelHeight + 50 
+          };
+        });
+      });
+      
+      // Special case for the end node
+      positions['end'] = { x: 300, y: (maxLevel + 1) * levelHeight + 50 };
+    }
+    
+    return positions;
+  };
+
+  // Helper to get edge label
+  const getEdgeLabel = (type) => {
+    switch (type) {
+      case 'delegation': return 'delegates';
+      case 'tool': return 'uses';
+      case 'initial': return 'start';
+      case 'final': return 'end';
+      default: return '';
+    }
+  };
+
+  return (
+    <Box h="100%" w="100%">
+      <HStack spacing={4} mb={4}>
+        <FormControl w="200px">
+          <FormLabel fontSize="sm">Layout</FormLabel>
+          <Select
+            size="sm"
+            value={layoutType}
+            onChange={(e) => setLayoutType(e.target.value)}
+          >
+            <option value="dagre">Hierarchical</option>
+            <option value="horizontal">Horizontal</option>
+            <option value="vertical">Vertical</option>
+          </Select>
+        </FormControl>
+        
+        <Button
+          size="sm"
+          leftIcon={<FiRefreshCw />}
+          onClick={() => generateFlowFromTrace(executionTrace)}
+          isLoading={isLoading}
+        >
+          Refresh Layout
+        </Button>
+      </HStack>
+      
+      {isLoading ? (
+        <Flex h="400px" justify="center" align="center">
+          <Spinner />
+        </Flex>
+      ) : nodes.length > 0 ? (
+        <Box h="500px" bg={cardBg} borderRadius="md">
+          <ReactFlow
+            nodes={nodes}
+            edges={edges}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+            fitView
+          >
+            <Background />
+            <Controls />
+            <MiniMap
+              nodeStrokeColor={(n) => {
+                return '#fff';
+              }}
+              nodeColor={(n) => {
+                return n.style?.background || '#eee';
+              }}
+            />
+          </ReactFlow>
+        </Box>
+      ) : (
+        <Flex h="400px" justify="center" align="center">
+          <Text color="gray.500">No visualization data available</Text>
+        </Flex>
+      )}
+    </Box>
+  );
+};
+
+export default FlowVisualization;
