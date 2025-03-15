@@ -7,6 +7,14 @@ import ExecutionViewer from './pages/ExecutionViewer';
 import Header from './components/Header';
 import Sidebar from './components/Sidebar';
 
+// Import placeholder components for the new routes
+import FlowList from './pages/FlowList';
+import AgentList from './pages/AgentList';
+import ToolList from './pages/ToolList';
+import CapabilityList from './pages/CapabilityList';
+import DeploymentList from './pages/DeploymentList';
+import Settings from './pages/Settings';
+
 // Define theme
 const theme = extendTheme({
   colors: {
@@ -47,8 +55,14 @@ function App() {
             <div style={{ padding: '20px' }}>
               <Routes>
                 <Route path="/" element={<Dashboard />} />
+                <Route path="/flows" element={<FlowList />} />
                 <Route path="/flows/new" element={<FlowEditor />} />
                 <Route path="/flows/:flowId" element={<FlowEditor />} />
+                <Route path="/agents" element={<AgentList />} />
+                <Route path="/tools" element={<ToolList />} />
+                <Route path="/capabilities" element={<CapabilityList />} />
+                <Route path="/deployments" element={<DeploymentList />} />
+                <Route path="/settings" element={<Settings />} />
                 <Route path="/executions/:executionId" element={<ExecutionViewer />} />
               </Routes>
             </div>
