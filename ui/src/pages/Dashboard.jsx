@@ -368,3 +368,21 @@ const Dashboard = () => {
                         cursor="pointer"
                         onClick={() => navigate(`/flows/${flow.id}`)}
                       >
+                        <Td>{flow.name}</Td>
+                        <Td>{flow.type}</Td>
+                        <Td>{flow.agents}</Td>
+                        <Td>{new Date(flow.created_at).toLocaleDateString()}</Td>
+                      </Tr>
+                    ))}
+                  </Tbody>
+                </Table>
+              </CardBody>
+            </Card>
+          </SimpleGrid>
+        </>
+      )}
+    </Box>
+  );
+};
+
+export default Dashboard;
