@@ -1,4 +1,5 @@
 // File: src/pages/DeploymentList.jsx
+/* eslint-disable no-unused-vars */
 import React from 'react';
 import { Box, Heading, Text, Button, Table, Thead, Tbody, Tr, Th, Td, Badge, HStack } from '@chakra-ui/react';
 import { FiPlus, FiPlay } from 'react-icons/fi';
