@@ -24,7 +24,6 @@ import {
   useToast,
 } from '@chakra-ui/react';
 import CapabilitySelector from './CapabilitySelector';
-import axios from 'axios';
 
 const AgentConfigEditor = ({ isOpen, onClose, agent, onSave }) => {
   const toast = useToast();
