@@ -171,3 +171,50 @@ async def analyze_input(input_data: Dict[str, Any]):
     except Exception as e:
         logger.exception(f"Error analyzing input: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/flows/{flow_id}/deploy", response_model=Dict[str, Any])
+async def deploy_flow(flow_id: str):
+    """
+    Deploy a flow for production use
+    
+    Args:
+        flow_id: ID of the flow to deploy
+        
+    Returns:
+        Deployment details
+    """
+    try:
+        # Deploy the flow
+        deployment_service = DeploymentService()
+        deployment = await deployment_service.deploy_flow(flow_id)
+        
+        return {
+            "deployment_id": deployment.get("deployment_id"),
+            "api_key": deployment.get("api_key"),
+            "endpoint_url": deployment.get("endpoint_url"),
+            "status": "active",
+            "deployed_at": datetime.utcnow().isoformat()
+        }
+    
+    except Exception as e:
+        logger.exception(f"Error deploying flow: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/deployments", response_model=List[Dict[str, Any]])
+async def list_deployments():
+    """
+    List all deployments
+    
+    Returns:
+        List of deployments
+    """
+    try:
+        # Get all deployments
+        deployment_service = DeploymentService()
+        deployments = await deployment_service.list_deployments()
+        
+        return deployments
+    
+    except Exception as e:
+        logger.exception(f"Error listing deployments: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
