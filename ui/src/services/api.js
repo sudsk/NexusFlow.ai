@@ -55,7 +55,10 @@ const apiService = {
   flows: {
     getAll: (params = {}) => api.get('/flows', { params }),
     getById: (flowId) => api.get(`/flows/${flowId}`),
-    create: (flowConfig) => api.post('/flows', { flow_config: flowConfig }),
+    create: (flowConfig) => {
+      console.log('Request payload:', { flow_config: flowConfig });
+      return api.post('/flows', { flow_config: flowConfig });
+    },
     update: (flowId, flowConfig) => api.put(`/flows/${flowId}`, { flow_config: flowConfig }),
     delete: (flowId) => api.delete(`/flows/${flowId}`),
     execute: (flowId, input, options = {}) => api.post(`/flows/${flowId}/execute`, { 
