@@ -221,6 +221,7 @@ async def analyze_input(input_data: Dict[str, Any]):
 #
 @router.post("/flows", response_model=FlowResponse, status_code=status.HTTP_201_CREATED)
 async def create_flow(request: FlowCreateRequest):
+    print("Received request:", request.model_dump_json())
     """
     Create a new flow
     
