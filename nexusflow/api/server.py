@@ -67,7 +67,7 @@ def create_app(
     )
     
     # Include NexusFlow router
-    app.include_router(router, prefix="/api/nexusflow")
+    app.include_router(router)
     
     # Add exception handlers
     @app.exception_handler(RequestValidationError)
