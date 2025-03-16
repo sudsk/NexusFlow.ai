@@ -56,7 +56,6 @@ const apiService = {
     getAll: (params = {}) => api.get('/flows', { params }),
     getById: (flowId) => api.get(`/flows/${flowId}`),
     create: (flowConfig) => {
-      console.log('Request payload:', { flow_config: flowConfig });
       return api.post('/flows', { flow_config: flowConfig });
     },
     update: (flowId, flowConfig) => api.put(`/flows/${flowId}`, { flow_config: flowConfig }),
