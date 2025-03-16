@@ -272,7 +272,7 @@ const FlowBuilder = ({ flowId, initialData, onSave }) => {
       let response;
       if (flowId) {
         // Update existing flow
-        response = await apiService.flows.update(flowId, { flow_config: flowConfig });
+        response = await apiService.flows.update(flowId, flowConfig);
       } else {
         // Create new flow
         response = await apiService.flows.create(flowConfig);
