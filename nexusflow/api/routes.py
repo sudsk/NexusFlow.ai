@@ -14,6 +14,7 @@ import asyncio
 
 from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends, status, Query, Path, Body
 from fastapi.responses import JSONResponse
+from sqlalchemy.orm import Session
 
 from nexusflow.api.models import (
     AgentConfig,
@@ -44,23 +45,26 @@ from nexusflow.agents import (
     AnalysisAgent
 )
 from nexusflow.graph import DynamicGraphBuilder
+from nexusflow.db.session import get_db
+from nexusflow.db.repositories import (
+    FlowRepository, 
+    ExecutionRepository,
+    DeploymentRepository,
+    WebhookRepository
+)
 
 # Get router from __init__.py
 from nexusflow.api import router
 
 logger = logging.getLogger(__name__)
 
-# In-memory storage for flows (would be replaced by database in production)
-flows_db = {}
-executions_db = {}
-deployments_db = {}
-
-def validate_api_key(api_key: str):
+def validate_api_key(api_key: str, db: Session = Depends(get_db)):
     """
     Validate API key
     
     Args:
         api_key: API key
+        db: Database session        
         
     Returns:
         API key if valid
@@ -86,13 +90,10 @@ def validate_api_key(api_key: str):
     key = api_key.replace("Bearer ", "")
     
     # Check if key is valid
-    valid_deployment_id = None
-    for deployment_id, deployment in deployments_db.items():
-        if deployment["api_key"] == key and deployment["status"] == "active":
-            valid_deployment_id = deployment_id
-            break
+    deployment_repo = DeploymentRepository(db)
+    deployment = deployment_repo.get_by_api_key(key)
     
-    if not valid_deployment_id:
+    if not deployment or deployment.status != "active":
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid API key"
@@ -220,34 +221,43 @@ async def analyze_input(input_data: Dict[str, Any]):
 # Flow management endpoints
 #
 @router.post("/flows", response_model=FlowResponse, status_code=status.HTTP_201_CREATED)
-async def create_flow(request: FlowCreateRequest):
-    print("Received request:", request.model_dump_json())
+async def create_flow(
+    request: FlowCreateRequest,
+    db: Session = Depends(get_db)
+):
     """
     Create a new flow
     
     Args:
         request: Flow creation request
+        db: Database session        
         
     Returns:
         Created flow
     """
     try:
-        # Generate flow ID
-        flow_id = str(uuid.uuid4())
+        # Create repository
+        repository = FlowRepository(db)
         
-        # Store flow configuration
+        # Prepare flow data
         flow_data = {
-            "id": flow_id,
             "name": request.flow_config.name,
             "description": request.flow_config.description,
-            "created_at": datetime.utcnow(),
-            "updated_at": datetime.utcnow(),
             "config": request.flow_config.model_dump()
         }
         
-        flows_db[flow_id] = flow_data
+        # Create flow in database
+        flow = repository.create(flow_data)
         
-        return FlowResponse(**flow_data)
+        # Return flow data
+        return FlowResponse(
+            id=flow.id,
+            name=flow.name,
+            description=flow.description,
+            created_at=flow.created_at,
+            updated_at=flow.updated_at,
+            config=FlowConfig(**flow.config)
+        )
     
     except Exception as e:
         logger.exception(f"Error creating flow: {str(e)}")
@@ -260,7 +270,8 @@ async def create_flow(request: FlowCreateRequest):
 async def list_flows(
     limit: int = Query(10, ge=1, le=100),
     offset: int = Query(0, ge=0),
-    name: Optional[str] = Query(None)
+    name: Optional[str] = Query(None),
+    db: Session = Depends(get_db)
 ):
     """
     List flows
@@ -269,24 +280,30 @@ async def list_flows(
         limit: Maximum number of flows to return
         offset: Number of flows to skip
         name: Filter by name (optional)
+        db: Database session        
         
     Returns:
         List of flows
     """
     try:
-        results = []
+        # Get repository
+        repository = FlowRepository(db)
+
+        # Get flows from database
+        flows = repository.get_all(skip=offset, limit=limit, name=name)
         
-        for flow_id, flow_data in flows_db.items():
-            # Apply name filter if provided
-            if name and name.lower() not in flow_data["name"].lower():
-                continue
-            
-            results.append(FlowResponse(**flow_data))
-        
-        # Apply pagination
-        paginated_results = results[offset:offset + limit]
-        
-        return paginated_results
+        # Convert to response models
+        return [
+            FlowResponse(
+                id=flow.id,
+                name=flow.name,
+                description=flow.description,
+                created_at=flow.created_at,
+                updated_at=flow.updated_at,
+                config=FlowConfig(**flow.config)
+            )
+            for flow in flows
+        ]
     
     except Exception as e:
         logger.exception(f"Error listing flows: {str(e)}")
@@ -296,24 +313,42 @@ async def list_flows(
         )
 
 @router.get("/flows/{flow_id}", response_model=FlowResponse)
-async def get_flow(flow_id: str = Path(...)):
+async def get_flow(
+    flow_id: str = Path(...),
+    db: Session = Depends(get_db)
+):
     """
     Get a specific flow
     
     Args:
         flow_id: ID of the flow
+        db: Database session        
         
     Returns:
         Flow details
     """
     try:
-        if flow_id not in flows_db:
+        # Get repository
+        repository = FlowRepository(db)
+        
+        # Get flow from database
+        flow = repository.get_by_id(flow_id)
+        
+        if not flow:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Flow with ID {flow_id} not found"
             )
         
-        return FlowResponse(**flows_db[flow_id])
+        # Convert to response model
+        return FlowResponse(
+            id=flow.id,
+            name=flow.name,
+            description=flow.description,
+            created_at=flow.created_at,
+            updated_at=flow.updated_at,
+            config=FlowConfig(**flow.config)
+        )
     
     except HTTPException:
         raise
@@ -327,7 +362,8 @@ async def get_flow(flow_id: str = Path(...)):
 @router.put("/flows/{flow_id}", response_model=FlowResponse)
 async def update_flow(
     request: FlowCreateRequest,
-    flow_id: str = Path(...)
+    flow_id: str = Path(...),
+    db: Session = Depends(get_db)
 ):
     """
     Update a flow
@@ -335,25 +371,44 @@ async def update_flow(
     Args:
         request: Flow update request
         flow_id: ID of the flow
+        db: Database session        
         
     Returns:
         Updated flow
     """
     try:
-        if flow_id not in flows_db:
+        # Get repository
+        repository = FlowRepository(db)
+        
+        # Check if flow exists
+        flow = repository.get_by_id(flow_id)
+                                    
+        if not flow:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Flow with ID {flow_id} not found"
             )
         
         # Update flow data
-        flow_data = flows_db[flow_id]
-        flow_data["name"] = request.flow_config.name
-        flow_data["description"] = request.flow_config.description
-        flow_data["updated_at"] = datetime.utcnow()
-        flow_data["config"] = request.flow_config.model_dump()
+        flow_data = {
+            "name": request.flow_config.name,
+            "description": request.flow_config.description,
+            "config": request.flow_config.model_dump(),
+            "updated_at": datetime.utcnow()
+        }
         
-        return FlowResponse(**flow_data)
+        # Update flow in database
+        updated_flow = repository.update(flow_id, flow_data)
+
+        # Convert to response model
+        return FlowResponse(
+            id=updated_flow.id,
+            name=updated_flow.name,
+            description=updated_flow.description,
+            created_at=updated_flow.created_at,
+            updated_at=updated_flow.updated_at,
+            config=FlowConfig(**updated_flow.config)
+        )
     
     except HTTPException:
         raise
@@ -365,24 +420,39 @@ async def update_flow(
         )
 
 @router.delete("/flows/{flow_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_flow(flow_id: str = Path(...)):
+async def delete_flow(
+    flow_id: str = Path(...),
+    db: Session = Depends(get_db)
+):
     """
     Delete a flow
     
     Args:
         flow_id: ID of the flow
+        db: Database session        
     """
     try:
-        if flow_id not in flows_db:
+        # Get repository
+        repository = FlowRepository(db)
+        
+        # Check if flow exists
+        flow = repository.get_by_id(flow_id)
+        if not flow:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Flow with ID {flow_id} not found"
             )
         
-        # Delete flow
-        del flows_db[flow_id]
+        # Delete flow from database
+        success = repository.delete(flow_id)
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to delete flow with ID {flow_id}"
+            )
         
-        return None
+        # Return no content
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
     
     except HTTPException:
         raise
