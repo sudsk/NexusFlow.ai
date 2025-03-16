@@ -833,7 +833,8 @@ async def execute_flow_background(
     execution_id: str,
     input_data: Dict[str, Any],
     options: Dict[str, Any] = None,
-    deployment_id: Optional[str] = None
+    deployment_id: Optional[str] = None,
+    db: Session = None
 ):
     """
     Execute a flow in the background
@@ -844,17 +845,37 @@ async def execute_flow_background(
         input_data: Input data for the flow
         options: Execution options
         deployment_id: ID of the deployment (if any)
+        db: Database session        
     """
     options = options or {}
+
+    # Create a new database session if not provided
+    if db is None:
+        from nexusflow.db.session import Session
+        db = Session()    
     
     try:
+        # Get repositories
+        from nexusflow.db.repositories import FlowRepository, ExecutionRepository
+        execution_repo = ExecutionRepository(db)
+        flow_repo = FlowRepository(db)
+        
         # Update execution status
-        execution_data = executions_db[execution_id]
-        execution_data["status"] = "running"
+        execution_repo.update(execution_id, {"status": "running"})
         
         # Get flow configuration
-        flow_data = flows_db[flow_id]
-        flow_config = FlowConfig(**flow_data["config"])
+        flow = flow_repo.get_by_id(flow_id)
+        if not flow:
+            execution_repo.update(execution_id, {
+                "status": "failed",
+                "completed_at": datetime.utcnow(),
+                "error": f"Flow with ID {flow_id} not found"
+            })
+            return
+
+        # Parse flow configuration
+        from nexusflow.api.models import FlowConfig
+        flow_config = FlowConfig(**flow.config)
         
         # Create agents from the configuration
         agents = []
@@ -864,7 +885,8 @@ async def execute_flow_background(
             agents.append(agent)
         
         # Create flow from the configuration
-        flow = Flow(
+        from nexusflow.core import Flow        
+        flow_instance = Flow(
             name=flow_config.name,
             description=flow_config.description,
             agents=agents,
@@ -873,12 +895,15 @@ async def execute_flow_background(
         )
         
         # Execute flow
-        result = await flow.execute(input_data)
+        result = await flow_instance.execute(input_data)
         
-        # Update execution record
-        execution_data["status"] = "completed"
-        execution_data["completed_at"] = datetime.utcnow()
-        execution_data["result"] = result
+        # Update execution record on completion
+        execution_repo.update(execution_id, {
+            "status": "completed",
+            "completed_at": datetime.utcnow(),
+            "result": result,
+            "execution_trace": result.get("execution_trace", [])
+        })
         
         # Send webhook notifications if this is a deployed flow
         if deployment_id:
@@ -886,18 +911,20 @@ async def execute_flow_background(
                 deployment_id=deployment_id,
                 execution_id=execution_id,
                 status="completed",
-                result=result
+                result=result,
+                db=db
             )
     
     except Exception as e:
         logger.exception(f"Error executing flow in background: {str(e)}")
         
         # Update execution record with error
-        if execution_id in executions_db:
-            execution_data = executions_db[execution_id]
-            execution_data["status"] = "failed"
-            execution_data["completed_at"] = datetime.utcnow()
-            execution_data["error"] = str(e)
+        try:
+            execution_repo.update(execution_id, {
+                "status": "failed",
+                "completed_at": datetime.utcnow(),
+                "error": str(e)
+            })
             
             # Send webhook notifications if this is a deployed flow
             if deployment_id:
@@ -905,15 +932,24 @@ async def execute_flow_background(
                     deployment_id=deployment_id,
                     execution_id=execution_id,
                     status="failed",
-                    error=str(e)
+                    error=str(e),
+                    db=db
                 )
+        except Exception as update_error:
+            logger.error(f"Error updating execution record: {str(update_error)}")
 
+    finally:
+        # Close the session if we created it
+        if db is not None:
+            db.close()
+            
 async def send_webhook_notifications(
     deployment_id: str,
     execution_id: str,
     status: str,
     result: Optional[Dict[str, Any]] = None,
-    error: Optional[str] = None
+    error: Optional[str] = None,
+    db: Session = None
 ):
     """
     Send webhook notifications for an execution
@@ -924,18 +960,24 @@ async def send_webhook_notifications(
         status: Execution status
         result: Execution result (for completed executions)
         error: Error message (for failed executions)
+        db: Database session        
     """
     try:
-        if deployment_id not in deployments_db:
-            logger.error(f"Deployment {deployment_id} not found for webhook notifications")
-            return
+        # Create a new database session if not provided
+        if db is None:
+            from nexusflow.db.session import Session
+            db = Session()
         
-        deployment = deployments_db[deployment_id]
-        webhooks = deployment.get("webhooks", [])
+        # Get repositories
+        from nexusflow.db.repositories import WebhookRepository
+        webhook_repo = WebhookRepository(db)
         
+        # Get webhooks for deployment
+        webhooks = webhook_repo.get_by_deployment_id(deployment_id)
+
         if not webhooks:
             return
-        
+      
         # Import httpx here to avoid circular imports
         import httpx
         import hmac
@@ -943,14 +985,21 @@ async def send_webhook_notifications(
         
         for webhook in webhooks:
             # Check if webhook should receive this event
-            if status not in webhook["events"] and "all" not in webhook["events"]:
+            webhook_events = webhook.events
+            if isinstance(webhook_events, str):
+                try:
+                    webhook_events = json.loads(webhook_events)
+                except json.JSONDecodeError:
+                    webhook_events = ["completed", "failed"]
+
+            if status not in webhook_events and "all" not in webhook_events:
                 continue
-            
+                
             # Prepare payload
             payload = {
                 "execution_id": execution_id,
                 "deployment_id": deployment_id,
-                "flow_id": deployment["flow_id"],
+                "flow_id": deployment.flow_id,
                 "status": status,
                 "timestamp": datetime.utcnow().isoformat()
             }
@@ -963,10 +1012,10 @@ async def send_webhook_notifications(
             # Add signature if secret is provided
             headers = {"Content-Type": "application/json"}
             
-            if webhook.get("secret"):
+            if webhook.secret:
                 payload_bytes = json.dumps(payload).encode()
                 signature = hmac.new(
-                    webhook["secret"].encode(),
+                    webhook.secret.encode(),
                     payload_bytes,
                     hashlib.sha256
                 ).hexdigest()
@@ -976,13 +1025,13 @@ async def send_webhook_notifications(
             async with httpx.AsyncClient() as client:
                 try:
                     await client.post(
-                        webhook["url"],
+                        webhook.url,
                         json=payload,
                         headers=headers,
                         timeout=10.0
                     )
                 except Exception as e:
-                    logger.error(f"Error sending webhook to {webhook['url']}: {str(e)}")
+                    logger.error(f"Error sending webhook to {webhook.url}: {str(e)}")
     
     except Exception as e:
         logger.exception(f"Error sending webhook notifications: {str(e)}")
