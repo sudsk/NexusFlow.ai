@@ -42,6 +42,7 @@ setup(
         "pandas>=2.0.0",
         "pytest>=7.3.1",
         "alembic>=1.15.1",
+        "psycopg2-binary>=2.9.5",
     ],
     extras_require={
         "dev": [
