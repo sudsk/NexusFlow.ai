@@ -431,3 +431,19 @@ class Flow:
             max_steps=data.get("max_steps", 10),
             tools=data.get("tools", {})
         )
+        
+    @classmethod
+    def from_database(cls, flow_record, session):
+        """Create a flow from a database record"""
+        config = flow_record.config
+        # Create agents based on config...
+        agents = []
+        
+        return cls(
+            name=flow_record.name,
+            flow_id=flow_record.id,
+            description=flow_record.description,
+            agents=agents,
+            max_steps=config.get("max_steps", 10),
+            tools=config.get("tools", {})
+        )
