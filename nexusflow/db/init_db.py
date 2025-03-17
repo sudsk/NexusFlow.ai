@@ -6,7 +6,7 @@ This script initializes the database tables and runs migrations.
 It can be run directly to create or update the database schema.
 
 Usage:
-    python -m initialize_db [--drop-all]
+    python -m init_db [--drop-all]
 
 Options:
     --drop-all  Drop all existing tables before creating new ones (caution!)
