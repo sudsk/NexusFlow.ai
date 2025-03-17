@@ -43,6 +43,13 @@ def create_app(
     Returns:
         FastAPI application
     """
+    # Initialize database
+    try:
+        init_db()
+        logger.info("Database initialized successfully")
+    except Exception as e:
+        logger.error(f"Error initializing database: {e}")
+        
     # Create FastAPI app
     app = FastAPI(
         title=title,
