@@ -76,7 +76,7 @@ class CapabilityMetadata(Base):
     capability_type = Column(String(100), nullable=False)
     agent_id = Column(String(36), nullable=False)
     score = Column(Float, default=1.0)
-    metadata = Column(JSON, nullable=True)
+    metadata_ = Column("metadata",JSON, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     
     # Composite unique constraint
