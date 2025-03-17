@@ -12,7 +12,7 @@ from datetime import datetime
 import json
 import asyncio
 
-from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends, status, Query, Path, Body
+from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends, status, Query, Path, Body, Response
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
@@ -72,7 +72,7 @@ def validate_api_key(api_key: str, db: Session = Depends(get_db)):
     Raises:
         HTTPException: If API key is invalid
     """
-    # For development, accept any non-empty key
+    # Check if API key is provided
     if not api_key:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -467,7 +467,8 @@ async def delete_flow(
 async def execute_flow_by_id(
     request: FlowExecutionRequest,
     background_tasks: BackgroundTasks,
-    flow_id: str = Path(...)
+    flow_id: str = Path(...),
+    db: Session = Depends(get_db)
 ):
     """
     Execute a flow by ID
@@ -476,37 +477,36 @@ async def execute_flow_by_id(
         request: Flow execution request
         background_tasks: FastAPI background tasks
         flow_id: ID of the flow
+        db: Database session
         
     Returns:
         Flow execution information
     """
     try:
-        if flow_id not in flows_db:
+        # Check if flow exists
+        flow_repo = FlowRepository(db)
+        flow = flow_repo.get_by_id(flow_id)
+        
+        if not flow:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Flow with ID {flow_id} not found"
             )
         
-        # Get flow configuration
-        flow_data = flows_db[flow_id]
-        flow_config = FlowConfig(**flow_data["config"])
-        
         # Generate execution ID
         execution_id = str(uuid.uuid4())
         
         # Create execution record
+        execution_repo = ExecutionRepository(db)
         execution_data = {
             "id": execution_id,
             "flow_id": flow_id,
             "status": "pending",
             "started_at": datetime.utcnow(),
-            "completed_at": None,
             "input": request.input,
-            "result": None,
-            "error": None
         }
         
-        executions_db[execution_id] = execution_data
+        execution = execution_repo.create(execution_data)
         
         # Execute flow in background
         background_tasks.add_task(
@@ -534,30 +534,39 @@ async def execute_flow_by_id(
         )
 
 @router.get("/executions/{execution_id}", response_model=FlowExecutionResponse)
-async def get_execution(execution_id: str = Path(...)):
+async def get_execution(
+    execution_id: str = Path(...),
+    db: Session = Depends(get_db)
+):
     """
     Get execution details
     
     Args:
         execution_id: ID of the execution
+        db: Database session
         
     Returns:
         Execution details
     """
     try:
-        if execution_id not in executions_db:
+        # Get repository
+        repository = ExecutionRepository(db)
+        
+        # Get execution from database
+        execution = repository.get_by_id(execution_id)
+        
+        if not execution:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Execution with ID {execution_id} not found"
             )
         
-        execution_data = executions_db[execution_id]
-        
+        # Convert to response model
         return FlowExecutionResponse(
-            execution_id=execution_id,
-            status=execution_data["status"],
-            result=execution_data["result"],
-            error=execution_data["error"]
+            execution_id=execution.id,
+            status=execution.status,
+            result=execution.result,
+            error=execution.error
         )
     
     except HTTPException:
@@ -569,13 +578,69 @@ async def get_execution(execution_id: str = Path(...)):
             detail=str(e)
         )
 
+# Get executions for a flow
+@router.get("/flows/{flow_id}/executions", response_model=List[FlowExecutionResponse])
+async def get_flow_executions(
+    flow_id: str = Path(...),
+    limit: int = Query(10, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db)
+):
+    """
+    Get executions for a flow
+    
+    Args:
+        flow_id: ID of the flow
+        limit: Maximum number of executions to return
+        offset: Number of executions to skip
+        db: Database session
+        
+    Returns:
+        List of executions
+    """
+    try:
+        # Check if flow exists
+        flow_repo = FlowRepository(db)
+        flow = flow_repo.get_by_id(flow_id)
+        
+        if not flow:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Flow with ID {flow_id} not found"
+            )
+        
+        # Get executions
+        execution_repo = ExecutionRepository(db)
+        executions = execution_repo.get_by_flow_id(flow_id, skip=offset, limit=limit)
+        
+        # Convert to response models
+        return [
+            FlowExecutionResponse(
+                execution_id=execution.id,
+                status=execution.status,
+                result=execution.result,
+                error=execution.error
+            )
+            for execution in executions
+        ]
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Error getting flow executions: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
 #
 # Deployment endpoints
 #
 @router.post("/flows/{flow_id}/deploy", response_model=DeployResponse)
 async def deploy_flow(
     request: DeployRequest,
-    flow_id: str = Path(...)
+    flow_id: str = Path(...),
+    db: Session = Depends(get_db)
 ):
     """
     Deploy a flow as an API endpoint
@@ -583,12 +648,17 @@ async def deploy_flow(
     Args:
         request: Deploy request
         flow_id: ID of the flow
+        db: Database session
         
     Returns:
         Deployment information
     """
     try:
-        if flow_id not in flows_db:
+        # Check if flow exists
+        flow_repo = FlowRepository(db)
+        flow = flow_repo.get_by_id(flow_id)
+        
+        if not flow:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Flow with ID {flow_id} not found"
@@ -602,26 +672,26 @@ async def deploy_flow(
         endpoint_url = f"/api/nexusflow/deployed/{request.version}/{deployment_id}/execute"
         
         # Create deployment record
+        deployment_repo = DeploymentRepository(db)
         deployment_data = {
             "id": deployment_id,
             "flow_id": flow_id,
             "version": request.version,
-            "description": request.description or flows_db[flow_id]["description"],
+            "description": request.description or flow.description,
             "api_key": api_key,
             "endpoint_url": endpoint_url,
             "status": "active",
-            "deployed_at": datetime.utcnow().isoformat(),
-            "webhooks": []
+            "deployed_at": datetime.utcnow()
         }
         
-        deployments_db[deployment_id] = deployment_data
+        deployment = deployment_repo.create(deployment_data)
         
         return DeployResponse(
-            deployment_id=deployment_id,
+            deployment_id=deployment.id,
             api_key=api_key,
             endpoint_url=endpoint_url,
-            status="active",
-            deployed_at=deployment_data["deployed_at"]
+            status=deployment.status,
+            deployed_at=deployment.deployed_at.isoformat()
         )
     
     except HTTPException:
@@ -636,7 +706,8 @@ async def deploy_flow(
 @router.post("/deployments/{deployment_id}/webhooks", response_model=Dict[str, Any])
 async def create_webhook(
     config: WebhookConfig,
-    deployment_id: str = Path(...)
+    deployment_id: str = Path(...),
+    db: Session = Depends(get_db)
 ):
     """
     Create a webhook for a deployment
@@ -644,12 +715,17 @@ async def create_webhook(
     Args:
         config: Webhook configuration
         deployment_id: ID of the deployment
+        db: Database session
         
     Returns:
         Created webhook information
     """
     try:
-        if deployment_id not in deployments_db:
+        # Check if deployment exists
+        deployment_repo = DeploymentRepository(db)
+        deployment = deployment_repo.get_by_id(deployment_id)
+        
+        if not deployment:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Deployment with ID {deployment_id} not found"
@@ -659,18 +735,24 @@ async def create_webhook(
         webhook_id = str(uuid.uuid4())
         
         # Create webhook record
+        webhook_repo = WebhookRepository(db)
         webhook_data = {
             "id": webhook_id,
+            "deployment_id": deployment_id,
             "url": config.url,
             "events": config.events,
             "secret": config.secret,
-            "created_at": datetime.utcnow().isoformat()
+            "created_at": datetime.utcnow()
         }
         
-        # Add to deployment
-        deployments_db[deployment_id]["webhooks"].append(webhook_data)
+        webhook = webhook_repo.create(webhook_data)
         
-        return webhook_data
+        return {
+            "id": webhook.id,
+            "url": webhook.url,
+            "events": webhook.events,
+            "created_at": webhook.created_at.isoformat()
+        }
     
     except HTTPException:
         raise
@@ -687,7 +769,8 @@ async def execute_deployed_flow(
     background_tasks: BackgroundTasks,
     version: str = Path(...),
     deployment_id: str = Path(...),
-    api_key: str = Depends(validate_api_key)  # This would need to be implemented
+    api_key: str = Depends(validate_api_key),
+    db: Session = Depends(get_db)
 ):
     """
     Execute a deployed flow
@@ -698,21 +781,28 @@ async def execute_deployed_flow(
         version: API version
         deployment_id: ID of the deployment
         api_key: API key for authentication
+        db: Database session
         
     Returns:
         Flow execution information
     """
     try:
-        if deployment_id not in deployments_db:
+        # Check if deployment exists
+        deployment_repo = DeploymentRepository(db)
+        deployment = deployment_repo.get_by_id(deployment_id)
+        
+        if not deployment:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Deployment with ID {deployment_id} not found"
             )
         
-        deployment_data = deployments_db[deployment_id]
-        flow_id = deployment_data["flow_id"]
+        # Get flow information
+        flow_id = deployment.flow_id
+        flow_repo = FlowRepository(db)
+        flow = flow_repo.get_by_id(flow_id)
         
-        if flow_id not in flows_db:
+        if not flow:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Flow with ID {flow_id} not found"
@@ -722,19 +812,17 @@ async def execute_deployed_flow(
         execution_id = str(uuid.uuid4())
         
         # Create execution record
+        execution_repo = ExecutionRepository(db)
         execution_data = {
             "id": execution_id,
             "flow_id": flow_id,
             "deployment_id": deployment_id,
             "status": "pending",
             "started_at": datetime.utcnow(),
-            "completed_at": None,
-            "input": request.input,
-            "result": None,
-            "error": None
+            "input": request.input
         }
         
-        executions_db[execution_id] = execution_data
+        execution = execution_repo.create(execution_data)
         
         # Execute flow in background
         background_tasks.add_task(
@@ -743,7 +831,8 @@ async def execute_deployed_flow(
             execution_id=execution_id,
             input_data=request.input,
             options=request.options or {},
-            deployment_id=deployment_id
+            deployment_id=deployment_id,
+            db=db
         )
         
         return FlowExecutionResponse(
@@ -856,7 +945,6 @@ async def execute_flow_background(
     
     try:
         # Get repositories
-        from nexusflow.db.repositories import FlowRepository, ExecutionRepository
         execution_repo = ExecutionRepository(db)
         flow_repo = FlowRepository(db)
         
@@ -884,8 +972,7 @@ async def execute_flow_background(
             agent = create_agent_from_config(agent_config)
             agents.append(agent)
         
-        # Create flow from the configuration
-        from nexusflow.core import Flow        
+        # Create flow from the configuration      
         flow_instance = Flow(
             name=flow_config.name,
             description=flow_config.description,
@@ -969,9 +1056,15 @@ async def send_webhook_notifications(
             db = Session()
         
         # Get repositories
-        from nexusflow.db.repositories import WebhookRepository
         webhook_repo = WebhookRepository(db)
+        deployment_repo = DeploymentRepository(db)
         
+        # Get deployment information
+        deployment = deployment_repo.get_by_id(deployment_id)
+        if not deployment:
+            logger.error(f"Deployment {deployment_id} not found")
+            return
+            
         # Get webhooks for deployment
         webhooks = webhook_repo.get_by_deployment_id(deployment_id)
 
@@ -985,55 +1078,281 @@ async def send_webhook_notifications(
         
         for webhook in webhooks:
             # Check if webhook should receive this event
-            webhook_events = webhook.events
-            if isinstance(webhook_events, str):
-                try:
-                    webhook_events = json.loads(webhook_events)
-                except json.JSONDecodeError:
-                    webhook_events = ["completed", "failed"]
-
-            if status not in webhook_events and "all" not in webhook_events:
-                continue
+            try:
+                webhook_events = webhook.events
+                if isinstance(webhook_events, str):
+                    try:
+                        webhook_events = json.loads(webhook_events)
+                    except json.JSONDecodeError:
+                        webhook_events = ["completed", "failed"]
                 
-            # Prepare payload
-            payload = {
-                "execution_id": execution_id,
-                "deployment_id": deployment_id,
-                "flow_id": deployment.flow_id,
-                "status": status,
-                "timestamp": datetime.utcnow().isoformat()
-            }
-            
-            if status == "completed" and result:
-                payload["result"] = result
-            elif status == "failed" and error:
-                payload["error"] = error
-            
-            # Add signature if secret is provided
-            headers = {"Content-Type": "application/json"}
-            
-            if webhook.secret:
-                payload_bytes = json.dumps(payload).encode()
-                signature = hmac.new(
-                    webhook.secret.encode(),
-                    payload_bytes,
-                    hashlib.sha256
-                ).hexdigest()
-                headers["X-NexusFlow-Signature"] = signature
-            
-            # Send webhook
-            async with httpx.AsyncClient() as client:
-                try:
-                    await client.post(
-                        webhook.url,
-                        json=payload,
-                        headers=headers,
-                        timeout=10.0
-                    )
-                except Exception as e:
-                    logger.error(f"Error sending webhook to {webhook.url}: {str(e)}")
+                # Skip if this status isn't in the webhook events
+                if status not in webhook_events and "all" not in webhook_events:
+                    continue
+                    
+                # Prepare payload
+                payload = {
+                    "execution_id": execution_id,
+                    "deployment_id": deployment_id,
+                    "flow_id": deployment.flow_id,
+                    "status": status,
+                    "timestamp": datetime.utcnow().isoformat()
+                }
+                
+                if status == "completed" and result:
+                    payload["result"] = result
+                elif status == "failed" and error:
+                    payload["error"] = error
+                
+                # Add signature if secret is provided
+                headers = {"Content-Type": "application/json"}
+                
+                if webhook.secret:
+                    payload_bytes = json.dumps(payload).encode()
+                    signature = hmac.new(
+                        webhook.secret.encode(),
+                        payload_bytes,
+                        hashlib.sha256
+                    ).hexdigest()
+                    headers["X-NexusFlow-Signature"] = signature
+                
+                # Send webhook
+                async with httpx.AsyncClient() as client:
+                    try:
+                        await client.post(
+                            webhook.url,
+                            json=payload,
+                            headers=headers,
+                            timeout=10.0
+                        )
+                    except Exception as e:
+                        logger.error(f"Error sending webhook to {webhook.url}: {str(e)}")
+            except Exception as e:
+                logger.error(f"Error processing webhook {webhook.id}: {str(e)}")
     
     except Exception as e:
         logger.exception(f"Error sending webhook notifications: {str(e)}")
+    finally:
+        # Close the session if we created it
+        if db is not None and db is not None:
+            db.close()
 
+# Endpoint to get deployments for a flow
+@router.get("/flows/{flow_id}/deployments", response_model=List[Dict[str, Any]])
+async def get_flow_deployments(
+    flow_id: str = Path(...),
+    db: Session = Depends(get_db)
+):
+    """
+    Get deployments for a flow
+    
+    Args:
+        flow_id: ID of the flow
+        db: Database session
+        
+    Returns:
+        List of deployments
+    """
+    try:
+        # Check if flow exists
+        flow_repo = FlowRepository(db)
+        flow = flow_repo.get_by_id(flow_id)
+        
+        if not flow:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Flow with ID {flow_id} not found"
+            )
+        
+        # Get deployments
+        deployment_repo = DeploymentRepository(db)
+        deployments = deployment_repo.get_by_flow_id(flow_id)
+        
+        # Convert to response format
+        return [
+            {
+                "id": deployment.id,
+                "version": deployment.version,
+                "status": deployment.status,
+                "endpoint_url": deployment.endpoint_url,
+                "deployed_at": deployment.deployed_at.isoformat(),
+                "description": deployment.description
+            }
+            for deployment in deployments
+        ]
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Error getting flow deployments: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
 
+# Endpoint to get deployment details
+@router.get("/deployments/{deployment_id}", response_model=Dict[str, Any])
+async def get_deployment(
+    deployment_id: str = Path(...),
+    db: Session = Depends(get_db)
+):
+    """
+    Get deployment details
+    
+    Args:
+        deployment_id: ID of the deployment
+        db: Database session
+        
+    Returns:
+        Deployment details
+    """
+    try:
+        # Get repository
+        deployment_repo = DeploymentRepository(db)
+        
+        # Get deployment from database
+        deployment = deployment_repo.get_by_id(deployment_id)
+        
+        if not deployment:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Deployment with ID {deployment_id} not found"
+            )
+        
+        # Get webhooks for the deployment
+        webhook_repo = WebhookRepository(db)
+        webhooks = webhook_repo.get_by_deployment_id(deployment_id)
+        
+        # Convert to response format
+        return {
+            "id": deployment.id,
+            "flow_id": deployment.flow_id,
+            "version": deployment.version,
+            "status": deployment.status,
+            "endpoint_url": deployment.endpoint_url,
+            "deployed_at": deployment.deployed_at.isoformat(),
+            "description": deployment.description,
+            "webhooks": [
+                {
+                    "id": webhook.id,
+                    "url": webhook.url,
+                    "events": webhook.events,
+                    "created_at": webhook.created_at.isoformat()
+                }
+                for webhook in webhooks
+            ]
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Error getting deployment: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
+# Endpoint to update deployment status
+@router.put("/deployments/{deployment_id}/status", response_model=Dict[str, Any])
+async def update_deployment_status(
+    status: str = Body(..., embed=True),
+    deployment_id: str = Path(...),
+    db: Session = Depends(get_db)
+):
+    """
+    Update deployment status
+    
+    Args:
+        status: New status ("active" or "inactive")
+        deployment_id: ID of the deployment
+        db: Database session
+        
+    Returns:
+        Updated deployment
+    """
+    try:
+        # Validate status
+        if status not in ["active", "inactive"]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Status must be 'active' or 'inactive'"
+            )
+        
+        # Get repository
+        deployment_repo = DeploymentRepository(db)
+        
+        # Get deployment from database
+        deployment = deployment_repo.get_by_id(deployment_id)
+        
+        if not deployment:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Deployment with ID {deployment_id} not found"
+            )
+        
+        # Update status
+        updated_deployment = deployment_repo.update(deployment_id, {"status": status})
+        
+        # Return updated deployment
+        return {
+            "id": updated_deployment.id,
+            "flow_id": updated_deployment.flow_id,
+            "status": updated_deployment.status,
+            "endpoint_url": updated_deployment.endpoint_url,
+            "deployed_at": updated_deployment.deployed_at.isoformat(),
+            "description": updated_deployment.description
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Error updating deployment status: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+
+# Endpoint to delete a webhook
+@router.delete("/webhooks/{webhook_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_webhook(
+    webhook_id: str = Path(...),
+    db: Session = Depends(get_db)
+):
+    """
+    Delete a webhook
+    
+    Args:
+        webhook_id: ID of the webhook
+        db: Database session
+    """
+    try:
+        # Get repository
+        webhook_repo = WebhookRepository(db)
+        
+        # Check if webhook exists
+        webhook = webhook_repo.get_by_id(webhook_id)
+        if not webhook:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Webhook with ID {webhook_id} not found"
+            )
+        
+        # Delete webhook
+        success = webhook_repo.delete(webhook_id)
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to delete webhook with ID {webhook_id}"
+            )
+        
+        # Return no content
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Error deleting webhook: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
