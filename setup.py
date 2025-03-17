@@ -41,6 +41,7 @@ setup(
         "numpy>=1.24.0",
         "pandas>=2.0.0",
         "pytest>=7.3.1",
+        "alembic>=1.15.1",
     ],
     extras_require={
         "dev": [
