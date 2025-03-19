@@ -5,7 +5,9 @@
 NexusFlow.ai has great potential to be extended into a more comprehensive agentic AI flow tool. Let me outline a folder and file structure that leverages your existing code while supporting the new architecture.
 
 **Reusable Components**
+
 **Frontend**
+
 Most of your existing UI code is very usable and aligns well with the architecture diagram:
 
 Flow Designer: Your existing FlowBuilder.jsx, FlowEditor.jsx, and related components can form the core of this module
@@ -14,6 +16,7 @@ Flow Testing Console: FlowTestConsole.jsx can be used as-is with minor modificat
 Settings: Your existing settings page can be extended
 
 **Backend**
+
 On the backend side, these components can be retained and extended:
 
 Core Agent System: Your agent, capability, and flow implementations provide a solid core
@@ -21,44 +24,51 @@ API Routes: The existing FastAPI routes provide good RESTful patterns
 Database Models: Your existing models are well-designed for the PostgreSQL database
 
 **Proposed Folder Structure**
-Copy/
-├── frontend/                     # React frontend application (renamed from ui)
-│   ├── public/                   # Static assets 
+
+/
+├── frontend/                     # React frontend application
+│   ├── public/
 │   └── src/
-│       ├── components/           # Reusable UI components (keep existing)
-│       │   ├── flow-designer/    # Flow design components (from existing)
-│       │   ├── agent-config/     # Agent configuration components (from existing)
-│       │   └── flow-tester/      # Flow testing components (from existing)
-│       ├── pages/                # Page components (keep existing)
+│       ├── components/           # Reusable UI components
+│       │   ├── flow-designer/    # Flow design components
+│       │   ├── agent-config/     # Agent configuration components
+│       │   ├── flow-testing/     # Flow testing components
+│       │   └── common/           # Common UI components
+│       ├── pages/                # Page components
 │       ├── services/             # API and service integrations
-│       │   ├── api.js            # API service (keep existing)
-│       │   └── framework-adapters/  # New adapters for frameworks
+│       ├── store/                # State management
 │       └── utils/                # Utility functions
 │
-├── backend/                      # Backend services (renamed from nexusflow)
-│   ├── api/                      # API layer (keep existing structure)
-│   │   ├── routes.py             # API routes (keep existing)
-│   │   └── models.py             # API models (keep existing)
-│   ├── core/                     # Core components (keep existing)
-│   │   ├── agent.py              # Agent model (keep existing)
-│   │   ├── capability.py         # Capability model (keep existing)
-│   │   └── flow.py               # Flow model (keep existing)
-│   ├── db/                       # Database layer (keep existing)
-│   ├── services/                 # Service layer (new)
-│   │   ├── flow_management.py    # Flow CRUD operations
-│   │   ├── execution_service.py  # Execution management 
-│   │   └── auth_service.py       # Authentication service
-│   ├── adapters/                 # Framework adapters (new)
-│   │   ├── adapter_interface.py  # Common interface
-│   │   ├── langgraph_adapter.py  # LangGraph adapter
-│   │   ├── crewai_adapter.py     # CrewAI adapter
-│   │   └── autogen_adapter.py    # AutoGen adapter
-│   └── tools/                    # Tool implementations (keep existing)
+├── backend/                      # Backend services
+│   ├── api/                      # API gateway layer
+│   │   ├── routes/               # Route definitions
+│   │   ├── models/               # Request/response models
+│   │   └── middleware/           # API middleware (auth, logging, etc.)
+│   ├── core/                     # Core domain models
+│   │   ├── entities/             # Core entity definitions
+│   │   └── interfaces/           # Core interfaces
+│   ├── services/                 # Service layer
+│   │   ├── flow/                 # Flow management service
+│   │   ├── execution/            # Execution service
+│   │   ├── auth/                 # Authentication service
+│   │   └── storage/              # Storage service
+│   ├── adapters/                 # Framework adapters
+│   │   ├── interfaces/           # Adapter interfaces
+│   │   ├── langgraph/            # LangGraph adapter
+│   │   ├── crewai/               # CrewAI adapter
+│   │   └── autogen/              # AutoGen adapter
+│   ├── tools/                    # Tool definitions and registry
+│   │   ├── registry.py           # Tool registry
+│   │   └── implementations/      # Tool implementations
+│   └── db/                       # Database layer
+│       ├── models/               # Database models
+│       ├── repositories/         # Data access repositories
+│       └── migrations/           # Database migrations
 │
-├── scripts/                      # Utility scripts
-│   └── migrate.py                # Database migrations
+├── config/                       # Configuration management
+│   └── settings.py               # Application settings
 │
-└── .env.example                  # Environment variables example (keep existing)
+└── scripts/                      # Utility scripts
 
 **Implementation Strategy**
 **1. Framework Adapter Layer**
@@ -114,4 +124,35 @@ This structure maintains backward compatibility with your existing codebase whil
 
 **Updated Architecture**
 Your original architecture diagram is solid and works well as a conceptual foundation. Here's how I'd refine it slightly:
-![NexusFlow.ai](docs/assets/logo.png)
+![Architecture](docs/assets/architecture-diagram.svg)
+
+The key change in this refined architecture is the addition of an API Gateway layer between the Frontend and Core Services, which will handle authentication, request validation, and routing.
+
+**Files to Delete**
+
+Since you're open to significant changes, here's a categorization of your existing files:
+Files to Keep (with modifications)
+
+Most frontend UI components (with updated API integrations)
+Database models and session management
+Core agent data structures
+
+**Files to Delete or Completely Rewrite**
+
+nexusflow/core/flow.py - Replace with adapter-based implementation
+nexusflow/core/node.py - Replace with framework-specific implementations
+nexusflow/graph/ directory - Replace with adapter-based implementations
+nexusflow/api/routes.py - Rewrite to work with new service layer
+nexusflow/api/server.py - Replace with a more configurable API gateway
+nexusflow/llm/ directory - Replace with a more modular provider system
+
+**Files to Add**
+
+New adapter interfaces and implementations
+Service-layer implementations
+Framework-specific converters
+Tool registry with framework mappings
+
+**New Folder Structure**
+
+
