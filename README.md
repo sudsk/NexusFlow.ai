@@ -25,54 +25,54 @@ Database Models: Your existing models are well-designed for the PostgreSQL datab
 
 **Proposed Folder Structure**
 
-/
-├── frontend/                     # React frontend application
-│   ├── public/
-│   └── src/
-│       ├── components/           # Reusable UI components
-│       │   ├── flow-designer/    # Flow design components
-│       │   ├── agent-config/     # Agent configuration components
-│       │   ├── flow-testing/     # Flow testing components
-│       │   └── common/           # Common UI components
-│       ├── pages/                # Page components
-│       ├── services/             # API and service integrations
-│       ├── store/                # State management
-│       └── utils/                # Utility functions
-│
-├── backend/                      # Backend services
-│   ├── api/                      # API gateway layer
-│   │   ├── routes/               # Route definitions
-│   │   ├── models/               # Request/response models
-│   │   └── middleware/           # API middleware (auth, logging, etc.)
-│   ├── core/                     # Core domain models
-│   │   ├── entities/             # Core entity definitions
-│   │   └── interfaces/           # Core interfaces
-│   ├── services/                 # Service layer
-│   │   ├── flow/                 # Flow management service
-│   │   ├── execution/            # Execution service
-│   │   ├── auth/                 # Authentication service
-│   │   └── storage/              # Storage service
-│   ├── adapters/                 # Framework adapters
-│   │   ├── interfaces/           # Adapter interfaces
-│   │   ├── langgraph/            # LangGraph adapter
-│   │   ├── crewai/               # CrewAI adapter
-│   │   └── autogen/              # AutoGen adapter
-│   ├── tools/                    # Tool definitions and registry
-│   │   ├── registry.py           # Tool registry
-│   │   └── implementations/      # Tool implementations
-│   └── db/                       # Database layer
-│       ├── models/               # Database models
-│       ├── repositories/         # Data access repositories
-│       └── migrations/           # Database migrations
-│
-├── config/                       # Configuration management
-│   └── settings.py               # Application settings
-│
-└── scripts/                      # Utility scripts
+/   
+├── frontend/                     # React frontend application  
+│   ├── public/  
+│   └── src/  
+│       ├── components/           # Reusable UI components  
+│       │   ├── flow-designer/    # Flow design components  
+│       │   ├── agent-config/     # Agent configuration components  
+│       │   ├── flow-testing/     # Flow testing components  
+│       │   └── common/           # Common UI components  
+│       ├── pages/                # Page components  
+│       ├── services/             # API and service integrations  
+│       ├── store/                # State management  
+│       └── utils/                # Utility functions  
+│   
+├── backend/                      # Backend services  
+│   ├── api/                      # API gateway layer  
+│   │   ├── routes/               # Route definitions  
+│   │   ├── models/               # Request/response models  
+│   │   └── middleware/           # API middleware (auth, logging, etc.)  
+│   ├── core/                     # Core domain models  
+│   │   ├── entities/             # Core entity definitions  
+│   │   └── interfaces/           # Core interfaces  
+│   ├── services/                 # Service layer  
+│   │   ├── flow/                 # Flow management service  
+│   │   ├── execution/            # Execution service  
+│   │   ├── auth/                 # Authentication service  
+│   │   └── storage/              # Storage service  
+│   ├── adapters/                 # Framework adapters  
+│   │   ├── interfaces/           # Adapter interfaces  
+│   │   ├── langgraph/            # LangGraph adapter  
+│   │   ├── crewai/               # CrewAI adapter  
+│   │   └── autogen/              # AutoGen adapter  
+│   ├── tools/                    # Tool definitions and registry  
+│   │   ├── registry.py           # Tool registry  
+│   │   └── implementations/      # Tool implementations  
+│   └── db/                       # Database layer   
+│       ├── models/               # Database models  
+│       ├── repositories/         # Data access repositories  
+│       └── migrations/           # Database migrations  
+│   
+├── config/                       # Configuration management  
+│   └── settings.py               # Application settings  
+│  
+└── scripts/                      # Utility scripts  
 
-**Implementation Strategy**
-**1. Framework Adapter Layer**
-This is the key addition needed to support multiple frameworks:
+**Implementation Strategy**  
+**1. Framework Adapter Layer**  
+This is the key addition needed to support multiple frameworks:  
 
 Create an adapter_interface.py that defines common methods for all frameworks:
 
@@ -154,5 +154,5 @@ Framework-specific converters
 Tool registry with framework mappings
 
 **New Folder Structure**
-
+![Folders](docs/assets/folders.png)
 
