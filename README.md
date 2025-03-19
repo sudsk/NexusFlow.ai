@@ -2,209 +2,116 @@
 
 ![NexusFlow.ai](docs/assets/logo.png)
 
-## Dynamic Agent Orchestration
+NexusFlow.ai has great potential to be extended into a more comprehensive agentic AI flow tool. Let me outline a folder and file structure that leverages your existing code while supporting the new architecture.
 
-NexusFlow is a next-generation framework for building AI agent systems with dynamic, capability-driven orchestration. Unlike traditional workflow systems that rely on predefined structures, NexusFlow enables fluid intelligence networks where the execution path emerges naturally from agent capabilities and relationships.
+**Reusable Components**
+**Frontend**
+Most of your existing UI code is very usable and aligns well with the architecture diagram:
 
-## Key Features
+Flow Designer: Your existing FlowBuilder.jsx, FlowEditor.jsx, and related components can form the core of this module
+Agent Config Component: AgentConfigEditor.jsx and NodePropertiesPanel.jsx provide a solid foundation
+Flow Testing Console: FlowTestConsole.jsx can be used as-is with minor modifications
+Settings: Your existing settings page can be extended
 
-- **Capability-Based Routing**: Automatically route tasks to the most suitable agents based on their capabilities
-- **Dynamic Graph Generation**: Build execution graphs at runtime based on input analysis and agent capabilities
-- **Autonomous Agent Decisions**: Allow agents to make their own decisions about task delegation and tool usage
-- **Emergent Workflows**: Create complex workflows that emerge from simple agent interactions
-- **Flexible Architecture**: Adapt to different use cases without changing the underlying system
+**Backend**
+On the backend side, these components can be retained and extended:
 
-## Installation
+Core Agent System: Your agent, capability, and flow implementations provide a solid core
+API Routes: The existing FastAPI routes provide good RESTful patterns
+Database Models: Your existing models are well-designed for the PostgreSQL database
 
-```bash
-pip install nexusflow
-```
+**Proposed Folder Structure**
+Copy/
+├── frontend/                     # React frontend application (renamed from ui)
+│   ├── public/                   # Static assets 
+│   └── src/
+│       ├── components/           # Reusable UI components (keep existing)
+│       │   ├── flow-designer/    # Flow design components (from existing)
+│       │   ├── agent-config/     # Agent configuration components (from existing)
+│       │   └── flow-tester/      # Flow testing components (from existing)
+│       ├── pages/                # Page components (keep existing)
+│       ├── services/             # API and service integrations
+│       │   ├── api.js            # API service (keep existing)
+│       │   └── framework-adapters/  # New adapters for frameworks
+│       └── utils/                # Utility functions
+│
+├── backend/                      # Backend services (renamed from nexusflow)
+│   ├── api/                      # API layer (keep existing structure)
+│   │   ├── routes.py             # API routes (keep existing)
+│   │   └── models.py             # API models (keep existing)
+│   ├── core/                     # Core components (keep existing)
+│   │   ├── agent.py              # Agent model (keep existing)
+│   │   ├── capability.py         # Capability model (keep existing)
+│   │   └── flow.py               # Flow model (keep existing)
+│   ├── db/                       # Database layer (keep existing)
+│   ├── services/                 # Service layer (new)
+│   │   ├── flow_management.py    # Flow CRUD operations
+│   │   ├── execution_service.py  # Execution management 
+│   │   └── auth_service.py       # Authentication service
+│   ├── adapters/                 # Framework adapters (new)
+│   │   ├── adapter_interface.py  # Common interface
+│   │   ├── langgraph_adapter.py  # LangGraph adapter
+│   │   ├── crewai_adapter.py     # CrewAI adapter
+│   │   └── autogen_adapter.py    # AutoGen adapter
+│   └── tools/                    # Tool implementations (keep existing)
+│
+├── scripts/                      # Utility scripts
+│   └── migrate.py                # Database migrations
+│
+└── .env.example                  # Environment variables example (keep existing)
 
-## Quick Start
+**Implementation Strategy**
+**1. Framework Adapter Layer**
+This is the key addition needed to support multiple frameworks:
 
-```python
-import asyncio
-from nexusflow.core import Agent, Flow, CapabilityType
+Create an adapter_interface.py that defines common methods for all frameworks:
 
-# Create agents with different capabilities
-researcher = Agent(
-    name="Researcher",
-    capabilities=[CapabilityType.INFORMATION_RETRIEVAL],
-    model_provider="openai",
-    model_name="gpt-4",
-    tool_names=["web_search"]
-)
+convert_flow(nexusflow_flow) -> framework_flow
+execute_flow(framework_flow, input_data) -> execution_result
+register_tools(tools) -> framework_tools
 
-analyst = Agent(
-    name="Analyst",
-    capabilities=[CapabilityType.DATA_ANALYSIS],
-    model_provider="openai",
-    model_name="gpt-4",
-    tool_names=["data_analysis"]
-)
 
-writer = Agent(
-    name="Writer",
-    capabilities=[CapabilityType.SUMMARIZATION],
-    model_provider="openai",
-    model_name="gpt-4"
-)
+Implement adapters for each framework (LangGraph, CrewAI, AutoGen, etc.)
 
-# Create tools
-tools = {
-    "web_search": {
-        "name": "web_search",
-        "description": "Search the web for information"
-    },
-    "data_analysis": {
-        "name": "data_analysis",
-        "description": "Analyze data and generate insights"
-    }
-}
+**2. Core Services Layer**
+Enhance your existing code with dedicated services:
 
-# Create a flow with these agents
-flow = Flow(
-    name="Research Assistant",
-    agents=[researcher, analyst, writer],
-    tools=tools
-)
+Flow Management Service: Build on your existing Flow class
+Execution Service: Extend your execution functionality
+Authentication Service: Add proper authentication for multi-user support
 
-# Execute the flow with an input query
-result = await flow.execute({
-    "query": "What are the environmental impacts of electric vehicles?"
-})
+**3. Frontend Enhancements**
+Your existing frontend code is quite capable, but needs these additions:
 
-# Print the result
-print(result["output"]["content"])
+Framework selection dropdown in Flow Designer
+Framework-specific configuration options
+Enhanced visualization for different framework execution patterns
 
-# Run the async code
-async def main():
-    result = await flow.execute({
-        "query": "What are the environmental impacts of electric vehicles?"
-    })
-    print(result["output"]["content"])
+**4. Storage Service**
+Implement proper storage service for:
 
-if __name__ == "__main__":
-    asyncio.run(main())
-```
+Flow definitions
+Execution histories
+Agent configurations
+Tool configurations
 
-## Core Concepts
+**What Can Stay Almost As-Is**
 
-### Capabilities
+Agent Implementation: Your agent system is well-designed
+Capability Registry: The capability system can be retained
+API Structure: Your FastAPI implementation is solid
+UI Components: Most React components can be reused
+Database Models: Your existing models work well
 
-Capabilities represent the skills or abilities that agents possess. They are used to dynamically route tasks to the most appropriate agents.
+**What Needs Significant Changes**
 
-```python
-from nexusflow.core import CapabilityType
+Flow Execution Engine: Needs to delegate to framework adapters
+Tool Registry: Needs to map to framework-specific tool formats
+Authentication: Needs to be implemented for multi-user support
+Deployment: Needs to handle framework-specific deployment requirements
 
-# Standard capability types
-CapabilityType.REASONING         # General reasoning and problem solving
-CapabilityType.INFORMATION_RETRIEVAL  # Finding and retrieving information
-CapabilityType.CODE_GENERATION   # Generating and understanding code
-CapabilityType.DATA_ANALYSIS     # Analyzing data and generating insights
-CapabilityType.SUMMARIZATION     # Creating concise summaries
-CapabilityType.PLANNING          # Creating plans and breaking down tasks
-CapabilityType.COORDINATION      # Coordinating multiple agents
-```
+This structure maintains backward compatibility with your existing codebase while laying the foundation for the multi-framework support and enhanced features you're looking to implement. The adapter pattern will be crucial for integrating with various frameworks without changing your core business logic.
 
-### Agents
-
-Agents are the core entities that perform tasks. Each agent has a set of capabilities and can make autonomous decisions.
-
-```python
-from nexusflow.core import Agent
-
-agent = Agent(
-    name="Data Specialist",
-    capabilities=[
-        CapabilityType.DATA_ANALYSIS,
-        CapabilityType.REASONING
-    ],
-    model_provider="anthropic",
-    model_name="claude-3-opus"
-)
-```
-
-### Flows
-
-Flows orchestrate the execution of agents based on their capabilities and the input requirements.
-
-```python
-from nexusflow.core import Flow
-
-flow = Flow(
-    name="Customer Support Assistant",
-    agents=[coordinator, knowledge_agent, tech_specialist, writer],
-    max_steps=10
-)
-```
-
-## API Usage
-
-NexusFlow provides a simple API for integrating into your applications:
-
-```python
-from fastapi import FastAPI
-from nexusflow.api import router as nexusflow_router
-
-app = FastAPI()
-app.include_router(nexusflow_router, prefix="/api/nexusflow")
-```
-
-## Advanced Features
-
-### Dynamic Graph Building
-
-NexusFlow builds execution graphs dynamically based on agent capabilities:
-
-```python
-from nexusflow.graph import DynamicGraphBuilder
-
-graph_builder = DynamicGraphBuilder()
-graph = graph_builder.build_graph(agents, input_data)
-```
-
-### Custom Tool Integration
-
-Extend NexusFlow with your own tools:
-
-```python
-# Define a custom tool
-my_tool = {
-    "name": "image_analysis",
-    "description": "Analyze an image and extract information",
-    "parameters": {
-        "image_url": {"type": "string", "description": "URL of the image to analyze"}
-    },
-    "handler": my_image_analysis_function
-}
-
-# Add to flow tools
-flow = Flow(
-    name="Media Analysis",
-    agents=[...],
-    tools={"image_analysis": my_tool}
-)
-```
-
-## Examples
-
-Check out the examples directory for complete working examples:
-
-- `examples/research_assistant.py` - A research assistant with multiple specialists
-- `examples/code_generator.py` - A code generation system with planning and implementation
-- `examples/customer_support.py` - A customer support system with knowledge agents
-
-## Contributing
-
-Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
-
-## License
-
-NexusFlow is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Learn More
-
-- [Documentation](https://nexusflow.ai/docs)
-- [Tutorials](https://nexusflow.ai/tutorials)
-- [Blog](https://nexusflow.ai/blog)
+**Updated Architecture**
+Your original architecture diagram is solid and works well as a conceptual foundation. Here's how I'd refine it slightly:
+![NexusFlow.ai](docs/assets/logo.png)
