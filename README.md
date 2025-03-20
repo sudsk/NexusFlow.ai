@@ -10,16 +10,34 @@ NexusFlow.ai is a comprehensive agent orchestration platform that supports multi
 
 NexusFlow uses a modular architecture with framework adapters that allow you to build flows using any supported orchestration framework.
 
-## Features
+## Features  
 
-- **Multi-Framework Support**: Build flows using LangGraph, CrewAI, AutoGen, or DSPy
-- **Visual Flow Designer**: Drag-and-drop interface for creating agent workflows
-- **Flexible Tool Integration**: Register and use custom tools within your flows
-- **Execution Monitoring**: Track and visualize execution paths and results
-- **Flow Deployment**: Deploy flows as API endpoints for production use
-
+- **Multi-Framework Support**: Build flows using LangGraph (fully supported in MVP), with basic support for CrewAI, AutoGen, and DSPy  
+- **Visual Flow Designer**: Drag-and-drop interface for creating agent workflows  
+- **Flexible Tool Integration**: Register, configure, and use custom tools within your flows  
+- **Execution Monitoring**: Track and visualize execution paths with real-time updates  
+- **Flow Deployment**: Deploy flows as API endpoints for production use  
+  
+## Tool Registry  
+  
+NexusFlow includes a built-in tool registry that allows you to:  
+  
+- Register custom tools that can be used across different frameworks  
+- Test tools individually before integrating them into flows  
+- Manage tool compatibility with different frameworks  
+- Configure framework-specific settings for each tool  
+  
 ## Local Development Setup
 
+### Environment Variables  
+  
+In addition to the database and API key settings, you can configure:  
+  
+- `DISABLE_AUTH=true` - Disables authentication for local development  
+- `USE_MOCK_TOOLS=true` - Uses mock implementations for tools without API keys  
+- `ALLOW_CODE_EXECUTION=false` - Controls whether code execution tools are enabled  
+- `REACT_APP_USE_MOCK_API=true` - Enables mock API mode in the frontend  
+  
 ### Prerequisites
 
 - Python 3.9 or newer
