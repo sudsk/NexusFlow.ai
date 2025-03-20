@@ -1,4 +1,4 @@
-/* eslint-disable no-unused-vars */
+// frontend/src/components/FlowBuilder.jsx
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import ReactFlow, {
   ReactFlowProvider,
@@ -36,35 +36,42 @@ import {
   NumberInputStepper,
   NumberIncrementStepper,
   NumberDecrementStepper,
+  Badge,
+  Tooltip,
 } from '@chakra-ui/react';
-import { FiSave, FiPlay, FiPlus, FiTrash2, FiLink, FiSettings } from 'react-icons/fi';
+import { FiSave, FiPlay, FiPlus, FiTrash2, FiLink, FiSettings, FiTool } from 'react-icons/fi';
 import AgentNode from './AgentNode';
 import AgentConfigEditor from './AgentConfigEditor';
 import NodePropertiesPanel from './NodePropertiesPanel';
 import FlowPropertiesPanel from './FlowPropertiesPanel';
 import FlowTestConsole from './FlowTestConsole';
-import apiService from '../services/api';
+import FlowToolConfiguration from './FlowToolConfiguration';
 
 // Define custom node types
 const nodeTypes = {
   agent: AgentNode,
 };
 
-const FlowBuilder = ({ flowId, initialData, onSave }) => {
+const FlowBuilder = ({ 
+  flowId, 
+  initialData, 
+  onSave, 
+  framework = 'langgraph',
+  isSaving = false
+}) => {
   const toast = useToast();
   const reactFlowWrapper = useRef(null);
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
-  const [reactFlowInstance, setReactFlowInstance] = te(null);
+  const [reactFlowInstance, setReactFlowInstance] = useState(null);
   const [flowName, setFlowName] = useState('Untitled Flow');
   const [flowDescription, setFlowDescription] = useState('');
   const [maxSteps, setMaxSteps] = useState(10);
   const [selectedNode, setSelectedNode] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
   const [availableCapabilities, setAvailableCapabilities] = useState([]);
   const [availableTools, setAvailableTools] = useState([]);
-  const [framework, setFramework] = useState("langgraph");
+  const [selectedTools, setSelectedTools] = useState([]);
   
   const {
     isOpen: isConfigEditorOpen,
@@ -83,43 +90,58 @@ const FlowBuilder = ({ flowId, initialData, onSave }) => {
     onOpen: onSettingsOpen,
     onClose: onSettingsClose,
   } = useDisclosure();
-
-  // Add this handler
-  const handleFrameworkChange = (newFramework) => {
-    setFramework(newFramework);
-    
-    // Optionally show a toast about changing frameworks
-    toast({
-      title: `Framework changed to ${newFramework}`,
-      description: "Your flow will be executed using this framework.",
-      status: "info",
-      duration: 3000,
-      isClosable: true,
-    });
-  };
   
+  const {
+    isOpen: isToolsOpen,
+    onOpen: onToolsOpen,
+    onClose: onToolsClose,
+  } = useDisclosure();
+
   // Fetch capabilities and tools on mount
   useEffect(() => {
-    const fetchCapabilitiesAndTools = async () => {
-      try {
-        // Fetch capabilities
-        const capabilitiesResponse = await apiService.capabilities.getAll();
-        setAvailableCapabilities(capabilitiesResponse.data || []);
-
-        // For tools, we could either fetch from a dedicated endpoint or extract from existing tools
-        // Using mock data for now
-        setAvailableTools([
-          { name: 'web_search', description: 'Search the web for information' },
-          { name: 'data_analysis', description: 'Analyze data and generate insights' },
-          { name: 'code_execution', description: 'Execute code in a secure sandbox' },
-        ]);
-      } catch (error) {
-        console.error('Error fetching capabilities and tools:', error);
-      }
-    };
-
     fetchCapabilitiesAndTools();
   }, []);
+
+  // Update when framework changes
+  useEffect(() => {
+    // Update tools based on framework compatibility
+    if (initialData && initialData.tools) {
+      setSelectedTools(initialData.tools);
+    }
+  }, [framework, initialData]);
+
+  const fetchCapabilitiesAndTools = async () => {
+    try {
+      // Fetch capabilities
+      const capabilitiesResponse = await apiService.capabilities.getAll();
+      setAvailableCapabilities(capabilitiesResponse?.data || []);
+
+      // Fetch tools compatible with the selected framework
+      const toolsResponse = await apiService.tools.getAll({ framework });
+      setAvailableTools(toolsResponse?.data || []);
+      
+      // If initial data already has tools, use those
+      if (initialData && initialData.tools) {
+        setSelectedTools(initialData.tools);
+      }
+    } catch (error) {
+      console.error('Error fetching capabilities and tools:', error);
+      
+      // Mock data for development
+      setAvailableCapabilities([
+        { type: 'reasoning', name: 'General Reasoning' },
+        { type: 'information_retrieval', name: 'Information Retrieval' },
+        { type: 'code_generation', name: 'Code Generation' },
+        { type: 'data_analysis', name: 'Data Analysis' }
+      ]);
+      
+      setAvailableTools([
+        { id: 'web_search', name: 'web_search', description: 'Search the web for information' },
+        { id: 'code_execution', name: 'code_execution', description: 'Execute code in a secure sandbox' },
+        { id: 'data_analysis', name: 'data_analysis', description: 'Analyze data and generate insights' },
+      ]);
+    }
+  };
 
   // Load initial data if provided
   useEffect(() => {
@@ -129,9 +151,9 @@ const FlowBuilder = ({ flowId, initialData, onSave }) => {
         // Visual flow representation already provided
         setNodes(initialData.nodes);
         setEdges(initialData.edges);
-      } else if (initialData.config && initialData.config.agents) {
+      } else if (initialData.agents) {
         // Convert backend format to visual nodes and edges
-        const newNodes = initialData.config.agents.map((agent, index) => ({
+        const newNodes = initialData.agents.map((agent, index) => ({
           id: agent.agent_id || `agent-${Date.now()}-${index}`,
           type: 'agent',
           position: { x: 100 + (index * 250), y: 100 + (index * 50) },
@@ -163,8 +185,13 @@ const FlowBuilder = ({ flowId, initialData, onSave }) => {
       
       if (initialData.name) setFlowName(initialData.name);
       if (initialData.description) setFlowDescription(initialData.description);
-      if (initialData.max_steps || initialData.config?.max_steps) {
-        setMaxSteps(initialData.max_steps || initialData.config?.max_steps);
+      if (initialData.max_steps || initialData.maxSteps) {
+        setMaxSteps(initialData.max_steps || initialData.maxSteps);
+      }
+      
+      // Set tools if available
+      if (initialData.tools) {
+        setSelectedTools(initialData.tools);
       }
     }
   }, [initialData, setNodes, setEdges]);
@@ -234,7 +261,7 @@ const FlowBuilder = ({ flowId, initialData, onSave }) => {
   const formatAgentConfig = (node) => {
     return {
       name: node.data.label,
-      agent_id: node.id.startsWith('agent-') ? undefined : node.id, // Only include if it's a valid ID
+      agent_id: node.id,
       capabilities: node.data.capabilities || [],
       model_provider: node.data.model ? node.data.model.split('/')[0] : 'openai',
       model_name: node.data.model ? node.data.model.split('/')[1] : 'gpt-4',
@@ -277,47 +304,23 @@ const FlowBuilder = ({ flowId, initialData, onSave }) => {
     const flowConfig = {
       name: flowName,
       description: flowDescription,
-      framework: framework,  // Include the framework
+      framework: framework,
       agents: agentConfigs,
       max_steps: maxSteps,
-      tools: {} // In a real implementation, we would build the tool configurations here
+      // Include selected tools
+      tools: selectedTools.reduce((acc, tool) => {
+        acc[tool.name] = {
+          description: tool.description,
+          config: tool.config || {}
+        };
+        return acc;
+      }, {})
     };
 
-    setIsSaving(true);
-    try {
-      let response;
-      if (flowId) {
-        // Update existing flow
-        response = await apiService.flows.update(flowId, flowConfig);
-      } else {
-        // Create new flow
-        response = await apiService.flows.create(flowConfig);
-      }
-      
-      toast({
-        title: 'Success',
-        description: `Flow ${flowId ? 'updated' : 'created'} successfully`,
-        status: 'success',
-        duration: 3000,
-        isClosable: true,
-      });
-      
-      if (onSave) {
-        onSave(response.data.id || response.data.flow_id, flowConfig);
-      }
-    } catch (error) {
-      console.error('Error saving flow:', error);
-      toast({
-        title: 'Error',
-        description: error.response?.data?.detail || 'Failed to save flow',
-        status: 'error',
-        duration: 5000,
-        isClosable: true,
-      });
-    } finally {
-      setIsSaving(false);
+    if (onSave) {
+      onSave(flowConfig);
     }
-  }, [flowId, flowName, flowDescription, framework, nodes, maxSteps, toast, onSave]);
+  }, [flowId, flowName, flowDescription, framework, nodes, maxSteps, selectedTools, toast, onSave]);
 
   const handleNodeConfigChange = useCallback((nodeId, newConfig) => {
     setNodes((nds) =>
@@ -336,6 +339,34 @@ const FlowBuilder = ({ flowId, initialData, onSave }) => {
     );
   }, [setNodes]);
 
+  // Handle tool selection changes
+  const handleToolsChange = (tools) => {
+    setSelectedTools(tools);
+    
+    // Update available tool names for agent configuration
+    const toolNames = tools.map(tool => tool.name);
+    
+    // Reset tool selections for agents if they're no longer available
+    setNodes((nds) =>
+      nds.map((node) => {
+        if (node.type === 'agent') {
+          const validToolNames = node.data.toolNames.filter(
+            toolName => toolNames.includes(toolName)
+          );
+          
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              toolNames: validToolNames,
+            },
+          };
+        }
+        return node;
+      })
+    );
+  };
+
   // Generate flow configuration for testing
   const getFlowConfig = useCallback(() => {
     const agentNodes = nodes.filter(node => node.type === 'agent');
@@ -344,11 +375,18 @@ const FlowBuilder = ({ flowId, initialData, onSave }) => {
     return {
       name: flowName,
       description: flowDescription,
+      framework: framework,
       agents: agentConfigs,
       max_steps: maxSteps,
-      tools: {} // Would be populated in a real implementation
+      tools: selectedTools.reduce((acc, tool) => {
+        acc[tool.name] = {
+          description: tool.description,
+          config: tool.config || {}
+        };
+        return acc;
+      }, {})
     };
-  }, [flowName, flowDescription, nodes, maxSteps]);
+  }, [flowName, flowDescription, framework, nodes, maxSteps, selectedTools]);
 
   return (
     <ReactFlowProvider>
@@ -395,11 +433,20 @@ const FlowBuilder = ({ flowId, initialData, onSave }) => {
                   >
                     Test
                   </Button>
-                  <IconButton
-                    icon={<FiSettings />}
-                    aria-label="Flow settings"
-                    onClick={onSettingsOpen}
-                  />
+                  <Tooltip label="Configure flow tools">
+                    <IconButton
+                      icon={<FiTool />}
+                      aria-label="Configure tools"
+                      onClick={onToolsOpen}
+                    />
+                  </Tooltip>
+                  <Tooltip label="Flow settings">
+                    <IconButton
+                      icon={<FiSettings />}
+                      aria-label="Flow settings"
+                      onClick={onSettingsOpen}
+                    />
+                  </Tooltip>
                 </HStack>
               </Panel>
               
@@ -431,7 +478,11 @@ const FlowBuilder = ({ flowId, initialData, onSave }) => {
                 node={selectedNode}
                 onChange={(newConfig) => handleNodeConfigChange(selectedNode.id, newConfig)}
                 capabilities={availableCapabilities}
-                tools={availableTools}
+                tools={selectedTools.map(tool => ({
+                  name: tool.name,
+                  description: tool.description
+                }))}
+                framework={framework}
               />
             ) : (
               <FlowPropertiesPanel
@@ -441,9 +492,29 @@ const FlowBuilder = ({ flowId, initialData, onSave }) => {
                 maxSteps={maxSteps}
                 onNameChange={setFlowName}
                 onDescriptionChange={setFlowDescription}
-                onFrameworkChange={handleFrameworkChange}
                 onMaxStepsChange={setMaxSteps}
               />
+            )}
+            
+            {/* Tools Overview */}
+            {!selectedNode && (
+              <Box mt={4}>
+                <Flex justify="space-between" align="center" mb={2}>
+                  <Text fontWeight="bold" fontSize="sm">Flow Tools</Text>
+                  <Button size="xs" leftIcon={<FiTool />} onClick={onToolsOpen}>Configure</Button>
+                </Flex>
+                {selectedTools.length > 0 ? (
+                  <VStack align="stretch" spacing={1}>
+                    {selectedTools.map(tool => (
+                      <Badge key={tool.id || tool.name} colorScheme="green" p={1} borderRadius="md">
+                        {tool.name}
+                      </Badge>
+                    ))}
+                  </VStack>
+                ) : (
+                  <Text fontSize="sm" color="gray.500">No tools configured</Text>
+                )}
+              </Box>
             )}
           </VStack>
         </Flex>
@@ -485,6 +556,20 @@ const FlowBuilder = ({ flowId, initialData, onSave }) => {
                   </NumberInputStepper>
                 </NumberInput>
               </FormControl>
+              
+              <FormControl>
+                <FormLabel>Framework</FormLabel>
+                <Select isDisabled value={framework}>
+                  <option value="langgraph">LangGraph</option>
+                  <option value="crewai">CrewAI</option>
+                  <option value="autogen">AutoGen</option>
+                  <option value="dspy">DSPy</option>
+                </Select>
+                <Text fontSize="sm" color="gray.500" mt={1}>
+                  The framework can only be changed from the main flow editor.
+                </Text>
+              </FormControl>
+              
               <FormControl>
                 <FormLabel>Default Tool Timeout (seconds)</FormLabel>
                 <NumberInput defaultValue={30} min={1} max={300}>
@@ -500,6 +585,30 @@ const FlowBuilder = ({ flowId, initialData, onSave }) => {
           <ModalFooter>
             <Button colorScheme="blue" mr={3} onClick={onSettingsClose}>
               Save Settings
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+
+      {/* Tools Configuration Modal */}
+      <Modal isOpen={isToolsOpen} onClose={onToolsClose} size="xl">
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>Configure Flow Tools</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody>
+            <Text mb={4}>
+              Select and configure the tools that will be available to agents in this flow.
+            </Text>
+            <FlowToolConfiguration
+              selectedTools={selectedTools}
+              framework={framework}
+              onToolsChange={handleToolsChange}
+            />
+          </ModalBody>
+          <ModalFooter>
+            <Button colorScheme="blue" onClick={onToolsClose}>
+              Done
             </Button>
           </ModalFooter>
         </ModalContent>
