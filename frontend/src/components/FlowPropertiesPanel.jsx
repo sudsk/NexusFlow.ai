@@ -1,5 +1,5 @@
 // frontend/src/components/FlowPropertiesPanel.jsx
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Heading,
@@ -15,7 +15,15 @@ import {
   NumberIncrementStepper,
   NumberDecrementStepper,
   FormHelperText,
+  Spinner,
+  Tag,
+  HStack,
+  Tooltip,
+  IconButton,
+  useColorModeValue,
 } from '@chakra-ui/react';
+import { FiInfo } from 'react-icons/fi';
+import apiService from '../services/api';
 
 const FlowPropertiesPanel = ({ 
   name, 
@@ -27,6 +35,63 @@ const FlowPropertiesPanel = ({
   onFrameworkChange,
   onMaxStepsChange 
 }) => {
+  const [frameworks, setFrameworks] = useState({});
+  const [isLoading, setIsLoading] = useState(true);
+  
+  // Fetch available frameworks
+  useEffect(() => {
+    const fetchFrameworks = async () => {
+      setIsLoading(true);
+      try {
+        const response = await apiService.frameworks.getAll();
+        setFrameworks(response.data || {});
+      } catch (error) {
+        console.error('Error fetching frameworks:', error);
+        // Set default frameworks in case of error
+        setFrameworks({
+          langgraph: {
+            multi_agent: true,
+            parallel_execution: true,
+            tools: true,
+            streaming: true,
+            visualization: true
+          },
+          crewai: {
+            multi_agent: true,
+            parallel_execution: false,
+            tools: true,
+            streaming: false,
+            visualization: true
+          }
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    fetchFrameworks();
+  }, []);
+  
+  // Helper to render feature tags for a framework
+  const renderFeatureTags = (features) => {
+    return (
+      <HStack spacing={1} mt={1} flexWrap="wrap">
+        {Object.entries(features).map(([feature, supported]) => (
+          <Tag 
+            key={feature}
+            size="sm" 
+            colorScheme={supported ? "green" : "red"}
+            variant={supported ? "solid" : "outline"}
+          >
+            {feature.replace(/_/g, ' ')}
+          </Tag>
+        ))}
+      </HStack>
+    );
+  };
+  
+  const borderColor = useColorModeValue("gray.200", "gray.600");
+  
   return (
     <Box>
       <Heading size="sm" mb={4}>Flow Properties</Heading>
@@ -51,19 +116,43 @@ const FlowPropertiesPanel = ({
         </FormControl>
         
         <FormControl>
-          <FormLabel>Framework</FormLabel>
-          <Select
-            value={framework}
-            onChange={(e) => onFrameworkChange && onFrameworkChange(e.target.value)}
-          >
-            <option value="langgraph">LangGraph</option>
-            <option value="crewai">CrewAI</option>
-            <option value="autogen">AutoGen</option>
-            <option value="dspy">DSPy</option>
-          </Select>
-          <FormHelperText>
-            Select the framework to use for executing this flow
-          </FormHelperText>
+          <FormLabel>
+            Framework
+            <Tooltip label="The AI orchestration framework that will execute this flow">
+              <IconButton
+                aria-label="Framework info"
+                icon={<FiInfo />}
+                size="xs"
+                variant="ghost"
+                ml={1}
+              />
+            </Tooltip>
+          </FormLabel>
+          
+          {isLoading ? (
+            <Spinner size="sm" ml={2} />
+          ) : (
+            <>
+              <Select
+                value={framework}
+                onChange={(e) => onFrameworkChange && onFrameworkChange(e.target.value)}
+              >
+                {Object.keys(frameworks).map((key) => (
+                  <option key={key} value={key}>
+                    {key.charAt(0).toUpperCase() + key.slice(1)}
+                  </option>
+                ))}
+              </Select>
+              
+              {/* Show features for selected framework */}
+              {framework && frameworks[framework] && (
+                <Box mt={2} p={2} borderWidth="1px" borderRadius="md" borderColor={borderColor}>
+                  <FormHelperText mb={1}>Framework Features:</FormHelperText>
+                  {renderFeatureTags(frameworks[framework])}
+                </Box>
+              )}
+            </>
+          )}
         </FormControl>
         
         <FormControl>
