@@ -509,3 +509,4 @@ const ExecutionsPage = () => {
       case 'dspy': return 'orange';
       default: return 'gray';
     }
+  }
