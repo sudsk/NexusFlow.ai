@@ -18,6 +18,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - nexusflow-network
 
   # Backend API
   backend:
@@ -42,8 +44,12 @@ services:
       - "8000:8000"
     volumes:
       - ./backend:/app
+      - backend_data:/app/data
     command: >
       bash -c "alembic upgrade head && python run.py"
+    networks:
+      - nexusflow-network
+    restart: unless-stopped
 
   # Frontend
   frontend:
@@ -61,6 +67,33 @@ services:
     volumes:
       - ./frontend:/app
       - /app/node_modules
+    networks:
+      - nexusflow-network
+    restart: unless-stopped
+
+  # Redis for caching and background tasks (optional for MVP)
+  redis:
+    image: redis:6-alpine
+    container_name: nexusflow-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - nexusflow-network
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
 
 volumes:
   postgres_data:
+  backend_data:
+  redis_data:
+
+networks:
+  nexusflow-network:
+    driver: bridge
