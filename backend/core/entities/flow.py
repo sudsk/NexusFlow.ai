@@ -1,4 +1,4 @@
-# backend/core/entities/flow.py
+# backend/core/entities/flow.py (updated)
 from typing import Dict, List, Any, Optional
 from datetime import datetime
 import uuid
@@ -13,6 +13,7 @@ class Flow:
         agents: Optional[List[Dict[str, Any]]] = None,
         max_steps: int = 10,
         tools: Optional[Dict[str, Any]] = None,
+        framework: str = "langgraph",
         flow_id: Optional[str] = None,
         created_at: Optional[datetime] = None,
         updated_at: Optional[datetime] = None
@@ -23,6 +24,7 @@ class Flow:
         self.agents = agents or []
         self.max_steps = max_steps
         self.tools = tools or {}
+        self.framework = framework
         self.created_at = created_at or datetime.utcnow()
         self.updated_at = updated_at or self.created_at
     
@@ -35,6 +37,7 @@ class Flow:
             "agents": self.agents,
             "max_steps": self.max_steps,
             "tools": self.tools,
+            "framework": self.framework,
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat()
         }
@@ -57,6 +60,7 @@ class Flow:
             agents=data.get('agents', []),
             max_steps=data.get('max_steps', 10),
             tools=data.get('tools', {}),
+            framework=data.get('framework', 'langgraph'),
             created_at=created_at,
             updated_at=updated_at
         )
