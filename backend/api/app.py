@@ -1,6 +1,7 @@
 # backend/api/app.py (updated again)
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from .middleware.error_middleware import error_handler
 
 from .routes import flow_routes, execution_routes, tool_routes, framework_routes, deployment_routes
 
@@ -18,6 +19,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Add error handling middleware
+app.middleware("http")(error_handler)
 
 # Include routers
 app.include_router(flow_routes.router)
