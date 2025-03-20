@@ -1,0 +1,66 @@
+version: '3.8'
+
+services:
+  # PostgreSQL database
+  postgres:
+    image: postgres:13
+    container_name: nexusflow-postgres
+    environment:
+      POSTGRES_USER: nexusflow-user
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-nexusflow-password}
+      POSTGRES_DB: nexusflow
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nexusflow-user -d nexusflow"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Backend API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: nexusflow-backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=nexusflow
+      - DB_USER=nexusflow-user
+      - DB_PASSWORD=${DB_PASSWORD:-nexusflow-password}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - USE_MOCK_TOOLS=${USE_MOCK_TOOLS:-true}
+      - ALLOW_CODE_EXECUTION=${ALLOW_CODE_EXECUTION:-false}
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+    command: >
+      bash -c "alembic upgrade head && python run.py"
+
+  # Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: nexusflow-frontend
+    depends_on:
+      - backend
+    environment:
+      - REACT_APP_API_URL=http://localhost:8000/api
+      - REACT_APP_USE_MOCK_API=${REACT_APP_USE_MOCK_API:-false}
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+
+volumes:
+  postgres_data:
