@@ -1,4 +1,4 @@
-// frontend/src/pages/Dashboard.jsx (updated with framework statistics)
+// frontend/src/pages/Dashboard.jsx
 import React, { useState, useEffect } from 'react';
 import {
   Box,
@@ -475,6 +475,64 @@ const Dashboard = () => {
                     </Table>
                   </CardBody>
                 </Card>
+
+                {/* Recent Executions Table */}
+                <Card bg={cardBg} borderColor={borderColor} borderWidth="1px" mt={6}>
+                  <CardHeader pb={0}>
+                    <Flex justify="space-between" align="center">
+                      <Heading size="md">Recent Executions</Heading>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => navigate('/executions')}
+                      >
+                        View All
+                      </Button>
+                    </Flex>
+                  </CardHeader>
+                  <CardBody>
+                    <Table variant="simple" size="sm">
+                      <Thead>
+                        <Tr>
+                          <Th>Flow</Th>
+                          <Th>Framework</Th>
+                          <Th>Status</Th>
+                          <Th>Time</Th>
+                          <Th>Duration</Th>
+                          <Th>Steps</Th>
+                        </Tr>
+                      </Thead>
+                      <Tbody>
+                        {recentExecutions.map((execution) => (
+                          <Tr
+                            key={execution.id}
+                            _hover={{ bg: 'gray.50' }}
+                            cursor="pointer"
+                            onClick={() => navigate(`/executions/${execution.id}`)}
+                          >
+                            <Td fontWeight="medium">{execution.flow_name}</Td>
+                            <Td>
+                              <Tag colorScheme={getFrameworkColor(execution.framework)} size="sm">
+                                {execution.framework}
+                              </Tag>
+                            </Td>
+                            <Td>
+                              <Badge colorScheme={getStatusColor(execution.status)}>
+                                <Flex align="center">
+                                  <Icon as={getStatusIcon(execution.status)} mr={1} />
+                                  {execution.status}
+                                </Flex>
+                              </Badge>
+                            </Td>
+                            <Td>{new Date(execution.started_at).toLocaleTimeString()}</Td>
+                            <Td>{execution.duration}</Td>
+                            <Td>{execution.steps}</Td>
+                          </Tr>
+                        ))}
+                      </Tbody>
+                    </Table>
+                  </CardBody>
+                </Card>
               </TabPanel>
 
               <TabPanel>
@@ -554,9 +612,21 @@ const Dashboard = () => {
                     <Heading size="md">LangGraph Flow Performance</Heading>
                   </CardHeader>
                   <CardBody>
-                    <Text>
-                      LangGraph-specific visualizations and metrics would be displayed here.
-                    </Text>
+                    {/* This would be replaced with actual LangGraph specific visualization */}
+                    <Box height="250px">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart
+                          data={recentExecutions.filter(e => e.framework === 'langgraph')}
+                          margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                        >
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="flow_name" />
+                          <YAxis />
+                          <Tooltip />
+                          <Bar dataKey="steps" fill="#3182CE" name="Steps" />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </Box>
                   </CardBody>
                 </Card>
               </TabPanel>
@@ -633,4 +703,123 @@ const Dashboard = () => {
                 </SimpleGrid>
 
                 {/* CrewAI specific content */}
-                <Card bg={cardBg}
+                <Card bg={cardBg} borderColor={borderColor} borderWidth="1px" mb={6}>
+                  <CardHeader>
+                    <Heading size="md">CrewAI Agent Interactions</Heading>
+                  </CardHeader>
+                  <CardBody>
+                    {/* This would be replaced with actual CrewAI specific visualization */}
+                    <Text mb={4}>
+                      CrewAI flows emphasize multi-agent collaboration with clear role assignments. 
+                      Each agent has specialized capabilities and works together to achieve complex tasks.
+                    </Text>
+                    <Box height="200px" bg="gray.100" borderRadius="md" p={4} display="flex" justifyContent="center" alignItems="center">
+                      <Text color="gray.500">CrewAI agent interaction visualization would appear here</Text>
+                    </Box>
+                  </CardBody>
+                </Card>
+              </TabPanel>
+
+              <TabPanel>
+                <Card bg={cardBg} borderColor={borderColor} borderWidth="1px" mb={6}>
+                  <CardHeader>
+                    <Heading size="md">Framework Comparison</Heading>
+                  </CardHeader>
+                  <CardBody>
+                    <SimpleGrid columns={{ base: 1, lg: 3 }} spacing={8}>
+                      {Object.entries(frameworkStats).map(([framework, stats]) => (
+                        <VStack 
+                          key={framework} 
+                          align="stretch" 
+                          p={4} 
+                          borderWidth="1px" 
+                          borderRadius="md"
+                          borderColor={`${stats.color}.200`}
+                          bg={`${stats.color}.50`}
+                        >
+                          <Flex align="center">
+                            <Icon as={stats.icon} boxSize={6} color={`${stats.color}.500`} mr={2} />
+                            <Heading size="md" color={`${stats.color}.700`} textTransform="capitalize">
+                              {framework}
+                            </Heading>
+                          </Flex>
+                          
+                          <Text>Flows: {stats.flows}</Text>
+                          <Text>Executions: {stats.executions}</Text>
+                          <Text>Success Rate: {stats.successRate}%</Text>
+                          
+                          <Button 
+                            mt={2} 
+                            colorScheme={stats.color}
+                            size="sm"
+                            onClick={() => navigate(`/flows/new?framework=${framework}`)}
+                          >
+                            Create Flow
+                          </Button>
+                        </VStack>
+                      ))}
+                    </SimpleGrid>
+                    
+                    <Box mt={8}>
+                      <Heading size="sm" mb={4}>Feature Comparison</Heading>
+                      <Table variant="simple" size="sm">
+                        <Thead>
+                          <Tr>
+                            <Th>Feature</Th>
+                            <Th>LangGraph</Th>
+                            <Th>CrewAI</Th>
+                            <Th>AutoGen</Th>
+                            <Th>DSPy</Th>
+                          </Tr>
+                        </Thead>
+                        <Tbody>
+                          <Tr>
+                            <Td>Multi-Agent</Td>
+                            <Td><Icon as={FiCheck} color="green.500" /></Td>
+                            <Td><Icon as={FiCheck} color="green.500" /></Td>
+                            <Td><Icon as={FiCheck} color="green.500" /></Td>
+                            <Td><Icon as={FiX} color="red.500" /></Td>
+                          </Tr>
+                          <Tr>
+                            <Td>Parallel Execution</Td>
+                            <Td><Icon as={FiCheck} color="green.500" /></Td>
+                            <Td><Icon as={FiX} color="red.500" /></Td>
+                            <Td><Icon as={FiCheck} color="green.500" /></Td>
+                            <Td><Icon as={FiX} color="red.500" /></Td>
+                          </Tr>
+                          <Tr>
+                            <Td>Tool Integration</Td>
+                            <Td><Icon as={FiCheck} color="green.500" /></Td>
+                            <Td><Icon as={FiCheck} color="green.500" /></Td>
+                            <Td><Icon as={FiCheck} color="green.500" /></Td>
+                            <Td><Icon as={FiCheck} color="green.500" /></Td>
+                          </Tr>
+                          <Tr>
+                            <Td>Streaming</Td>
+                            <Td><Icon as={FiCheck} color="green.500" /></Td>
+                            <Td><Icon as={FiX} color="red.500" /></Td>
+                            <Td><Icon as={FiCheck} color="green.500" /></Td>
+                            <Td><Icon as={FiX} color="red.500" /></Td>
+                          </Tr>
+                          <Tr>
+                            <Td>Visualization</Td>
+                            <Td><Icon as={FiCheck} color="green.500" /></Td>
+                            <Td><Icon as={FiCheck} color="green.500" /></Td>
+                            <Td><Icon as={FiCheck} color="green.500" /></Td>
+                            <Td><Icon as={FiCheck} color="green.500" /></Td>
+                          </Tr>
+                        </Tbody>
+                      </Table>
+                    </Box>
+                  </CardBody>
+                </Card>
+              </TabPanel>
+            </TabPanels>
+          </Tabs>
+        </>
+      )}
+    </Box>
+  );
+};
+
+export default Dashboard;
