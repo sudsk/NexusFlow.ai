@@ -78,6 +78,190 @@ const ExecutionViewer = () => {
   const borderColor = useColorModeValue('gray.200', 'gray.600');
   const codeBg = useColorModeValue('gray.50', 'gray.700');
 
+  // Function to refresh execution data (for in-progress executions)
+  const refreshExecution = async () => {
+    setIsRefreshing(true);
+    
+    try {
+      const response = await apiService.executions.getById(executionId);
+      setExecution(response.data);
+      
+      if (response.data.execution_trace && response.data.execution_trace.length > 0) {
+        generateVisualization(response.data);
+      }
+      
+      toast({
+        title: 'Data refreshed',
+        status: 'success',
+        duration: 2000,
+        isClosable: true,
+      });
+    } catch (error) {
+      console.error('Error refreshing execution:', error);
+      toast({
+        title: 'Refresh failed',
+        description: error.response?.data?.detail || 'Could not refresh execution data',
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      });
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  // Generate basic visualization from execution trace
+  const generateVisualization = (executionData) => {
+    if (!executionData.execution_trace || executionData.execution_trace.length === 0) {
+      setNodes([]);
+      setEdges([]);
+      return;
+    }
+    
+    const trace = executionData.execution_trace;
+    const flowNodes = [];
+    const flowEdges = [];
+    const nodeMap = {};
+    let nodePositions = {};
+    
+    // First pass: create nodes for each unique agent
+    const agents = new Set();
+    trace.forEach(item => {
+      if (item.agent_id && !agents.has(item.agent_id)) {
+        agents.add(item.agent_id);
+      }
+    });
+    
+    // Create node positions in a circular layout
+    const radius = 200;
+    const center = { x: 300, y: 300 };
+    let i = 0;
+    agents.forEach(agentId => {
+      const angle = (i / agents.size) * 2 * Math.PI;
+      nodePositions[agentId] = {
+        x: center.x + radius * Math.cos(angle),
+        y: center.y + radius * Math.sin(angle)
+      };
+      i++;
+    });
+    
+    // Create nodes
+    agents.forEach(agentId => {
+      // Find agent name from trace
+      const agentItem = trace.find(item => item.agent_id === agentId);
+      const agentName = agentItem ? agentItem.agent_name || agentId : agentId;
+      
+      flowNodes.push({
+        id: agentId,
+        data: { 
+          label: agentName,
+          type: 'agent'
+        },
+        position: nodePositions[agentId],
+        style: {
+          background: '#D6EAF8',
+          border: '1px solid #3498DB',
+          borderRadius: '5px',
+          padding: '10px',
+          width: 150,
+        }
+      });
+    });
+    
+    // Create start and end nodes
+    if (trace.length > 0) {
+      // Start node
+      flowNodes.push({
+        id: 'start',
+        data: { 
+          label: 'Start',
+          type: 'start'
+        },
+        position: { x: center.x, y: center.y - radius - 100 },
+        style: {
+          background: '#D5F5E3',
+          border: '1px solid #2ECC71',
+          borderRadius: '5px',
+          padding: '10px',
+          width: 100,
+        }
+      });
+      
+      // End node
+      flowNodes.push({
+        id: 'end',
+        data: { 
+          label: 'End',
+          type: 'end'
+        },
+        position: { x: center.x, y: center.y + radius + 100 },
+        style: {
+          background: '#FADBD8',
+          border: '1px solid #E74C3C',
+          borderRadius: '5px',
+          padding: '10px',
+          width: 100,
+        }
+      });
+      
+      // Connect start to first agent
+      const firstAgentId = trace.find(item => item.agent_id)?.agent_id;
+      if (firstAgentId) {
+        flowEdges.push({
+          id: `edge-start-${firstAgentId}`,
+          source: 'start',
+          target: firstAgentId,
+          animated: true,
+          style: { stroke: '#2ECC71' }
+        });
+      }
+    }
+    
+    // Second pass: create edges based on delegations
+    let edgeId = 0;
+    const delegations = trace.filter(item => item.type === 'delegation');
+    
+    delegations.forEach(delegation => {
+      // Find the previous step to determine source
+      const delegationStep = delegation.step || 0;
+      const previousStep = trace
+        .filter(item => (item.step || 0) < delegationStep && item.agent_id)
+        .sort((a, b) => (b.step || 0) - (a.step || 0))[0];
+      
+      if (previousStep && previousStep.agent_id && delegation.agent_id) {
+        flowEdges.push({
+          id: `edge-${edgeId++}`,
+          source: previousStep.agent_id,
+          target: delegation.agent_id,
+          animated: true,
+          label: 'delegates',
+          labelStyle: { fill: '#333', fontWeight: 700 },
+          style: { stroke: '#3498DB' }
+        });
+      }
+    });
+    
+    // Connect last agent to end node
+    if (trace.length > 0) {
+      const lastAgentId = trace
+        .filter(item => item.agent_id)
+        .sort((a, b) => (b.step || 0) - (a.step || 0))[0]?.agent_id;
+      
+      if (lastAgentId) {
+        flowEdges.push({
+          id: `edge-${lastAgentId}-end`,
+          source: lastAgentId,
+          target: 'end',
+          animated: true,
+          style: { stroke: '#E74C3C' }
+        });
+      }
+    }
+    
+    setNodes(flowNodes);
+    setEdges(flowEdges);
+  };
+
   // Fetch execution data
   useEffect(() => {
     fetchExecutionData();
@@ -579,188 +763,6 @@ const ExecutionViewer = () => {
       </Tabs>
     </Box>
   );
+};
 
-
-  // Function to refresh execution data (for in-progress executions)
-  const refreshExecution = async () => {
-    setIsRefreshing(true);
-    
-    try {
-      const response = await apiService.executions.getById(executionId);
-      setExecution(response.data);
-      
-      if (response.data.execution_trace && response.data.execution_trace.length > 0) {
-        generateVisualization(response.data);
-      }
-      
-      toast({
-        title: 'Data refreshed',
-        status: 'success',
-        duration: 2000,
-        isClosable: true,
-      });
-    } catch (error) {
-      console.error('Error refreshing execution:', error);
-      toast({
-        title: 'Refresh failed',
-        description: error.response?.data?.detail || 'Could not refresh execution data',
-        status: 'error',
-        duration: 5000,
-        isClosable: true,
-      });
-    } finally {
-      setIsRefreshing(false);
-    }
-  };
-
-  // Generate basic visualization from execution trace
-  const generateVisualization = (executionData) => {
-    if (!executionData.execution_trace || executionData.execution_trace.length === 0) {
-      setNodes([]);
-      setEdges([]);
-      return;
-    }
-    
-    const trace = executionData.execution_trace;
-    const flowNodes = [];
-    const flowEdges = [];
-    const nodeMap = {};
-    let nodePositions = {};
-    
-    // First pass: create nodes for each unique agent
-    const agents = new Set();
-    trace.forEach(item => {
-      if (item.agent_id && !agents.has(item.agent_id)) {
-        agents.add(item.agent_id);
-      }
-    });
-    
-    // Create node positions in a circular layout
-    const radius = 200;
-    const center = { x: 300, y: 300 };
-    let i = 0;
-    agents.forEach(agentId => {
-      const angle = (i / agents.size) * 2 * Math.PI;
-      nodePositions[agentId] = {
-        x: center.x + radius * Math.cos(angle),
-        y: center.y + radius * Math.sin(angle)
-      };
-      i++;
-    });
-    
-    // Create nodes
-    agents.forEach(agentId => {
-      // Find agent name from trace
-      const agentItem = trace.find(item => item.agent_id === agentId);
-      const agentName = agentItem ? agentItem.agent_name || agentId : agentId;
-      
-      flowNodes.push({
-        id: agentId,
-        data: { 
-          label: agentName,
-          type: 'agent'
-        },
-        position: nodePositions[agentId],
-        style: {
-          background: '#D6EAF8',
-          border: '1px solid #3498DB',
-          borderRadius: '5px',
-          padding: '10px',
-          width: 150,
-        }
-      });
-    });
-    
-    // Create start and end nodes
-    if (trace.length > 0) {
-      // Start node
-      flowNodes.push({
-        id: 'start',
-        data: { 
-          label: 'Start',
-          type: 'start'
-        },
-        position: { x: center.x, y: center.y - radius - 100 },
-        style: {
-          background: '#D5F5E3',
-          border: '1px solid #2ECC71',
-          borderRadius: '5px',
-          padding: '10px',
-          width: 100,
-        }
-      });
-      
-      // End node
-      flowNodes.push({
-        id: 'end',
-        data: { 
-          label: 'End',
-          type: 'end'
-        },
-        position: { x: center.x, y: center.y + radius + 100 },
-        style: {
-          background: '#FADBD8',
-          border: '1px solid #E74C3C',
-          borderRadius: '5px',
-          padding: '10px',
-          width: 100,
-        }
-      });
-      
-      // Connect start to first agent
-      const firstAgentId = trace.find(item => item.agent_id)?.agent_id;
-      if (firstAgentId) {
-        flowEdges.push({
-          id: `edge-start-${firstAgentId}`,
-          source: 'start',
-          target: firstAgentId,
-          animated: true,
-          style: { stroke: '#2ECC71' }
-        });
-      }
-    }
-    
-    // Second pass: create edges based on delegations
-    let edgeId = 0;
-    const delegations = trace.filter(item => item.type === 'delegation');
-    
-    delegations.forEach(delegation => {
-      // Find the previous step to determine source
-      const delegationStep = delegation.step || 0;
-      const previousStep = trace
-        .filter(item => (item.step || 0) < delegationStep && item.agent_id)
-        .sort((a, b) => (b.step || 0) - (a.step || 0))[0];
-      
-      if (previousStep && previousStep.agent_id && delegation.agent_id) {
-        flowEdges.push({
-          id: `edge-${edgeId++}`,
-          source: previousStep.agent_id,
-          target: delegation.agent_id,
-          animated: true,
-          label: 'delegates',
-          labelStyle: { fill: '#333', fontWeight: 700 },
-          style: { stroke: '#3498DB' }
-        });
-      }
-    });
-    
-    // Connect last agent to end node
-    if (trace.length > 0) {
-      const lastAgentId = trace
-        .filter(item => item.agent_id)
-        .sort((a, b) => (b.step || 0) - (a.step || 0))[0]?.agent_id;
-      
-      if (lastAgentId) {
-        flowEdges.push({
-          id: `edge-${lastAgentId}-end`,
-          source: lastAgentId,
-          target: 'end',
-          animated: true,
-          style: { stroke: '#E74C3C' }
-        });
-      }
-    }
-    
-    setNodes(flowNodes);
-    setEdges(flowEdges);
-  }
+export default ExecutionViewer;
