@@ -1,6 +1,7 @@
-# backend/db/repositories/flow_repository.py
+# backend/db/repositories/flow_repository.py (updated)
 from typing import List, Optional, Dict, Any
 from sqlalchemy.orm import Session
+from sqlalchemy import or_
 
 from ..models.flow_model import FlowModel
 from ...core.entities.flow import Flow
@@ -11,12 +12,24 @@ class FlowRepository:
     def __init__(self, db: Session):
         self.db = db
     
-    def get_all(self, skip: int = 0, limit: int = 100, name: Optional[str] = None) -> List[Flow]:
+    def get_all(
+        self, 
+        skip: int = 0, 
+        limit: int = 100, 
+        name: Optional[str] = None,
+        framework: Optional[str] = None
+    ) -> List[Flow]:
         """Get all flows with optional filtering"""
         query = self.db.query(FlowModel)
         
         if name:
-            query = query.filter(FlowModel.name.ilike(f"%{name}%"))
+            query = query.filter(or_(
+                FlowModel.name.ilike(f"%{name}%"),
+                FlowModel.description.ilike(f"%{name}%")
+            ))
+        
+        if framework:
+            query = query.filter(FlowModel.framework == framework)
         
         flow_models = query.offset(skip).limit(limit).all()
         return [self._map_to_entity(model) for model in flow_models]
@@ -34,6 +47,7 @@ class FlowRepository:
             id=flow.flow_id,
             name=flow.name,
             description=flow.description,
+            framework=flow.framework,
             config={
                 "agents": flow.agents,
                 "max_steps": flow.max_steps,
@@ -53,6 +67,7 @@ class FlowRepository:
         
         flow_model.name = flow.name
         flow_model.description = flow.description
+        flow_model.framework = flow.framework
         flow_model.config = {
             "agents": flow.agents,
             "max_steps": flow.max_steps,
@@ -83,6 +98,7 @@ class FlowRepository:
             agents=config.get("agents", []),
             max_steps=config.get("max_steps", 10),
             tools=config.get("tools", {}),
+            framework=model.framework,
             created_at=model.created_at,
             updated_at=model.updated_at
         )
