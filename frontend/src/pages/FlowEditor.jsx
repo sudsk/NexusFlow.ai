@@ -1,4 +1,4 @@
-// frontend/src/pages/FlowEditor.jsx (updated with framework selection)
+// frontend/src/pages/FlowEditor.jsx
 import React, { useState, useEffect } from 'react';
 import {
   Box,
@@ -26,13 +26,20 @@ import {
   ModalContent,
   ModalHeader,
   ModalBody,
-  ModalFooter,
   ModalCloseButton,
+  ModalFooter,
+  Tabs,
+  TabList,
+  TabPanels,
+  Tab,
+  TabPanel,
+  Badge,
 } from '@chakra-ui/react';
-import { FiHome, FiActivity, FiCpu, FiDatabase, FiCode, FiSearch, FiSettings } from 'react-icons/fi';
+import { FiHome, FiActivity, FiCpu, FiDatabase, FiCode, FiSearch, FiSettings, FiTool } from 'react-icons/fi';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import FlowBuilder from '../components/FlowBuilder';
 import FrameworkSelector from '../components/FrameworkSelector';
+import FlowToolConfiguration from '../components/FlowToolConfiguration';
 import apiService from '../services/api';
 
 const FlowEditor = () => {
@@ -42,46 +49,102 @@ const FlowEditor = () => {
   const toast = useToast();
   const [flowData, setFlowData] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [selectedFramework, setSelectedFramework] = useState('langgraph');
-  const { isOpen, onOpen, onClose } = useDisclosure();
+  const [selectedTab, setSelectedTab] = useState(0);
+  const [selectedTools, setSelectedTools] = useState([]);
+  
+  const { isOpen: isFrameworkModalOpen, onOpen: onFrameworkModalOpen, onClose: onFrameworkModalClose } = useDisclosure();
+  const { isOpen: isToolsModalOpen, onOpen: onToolsModalOpen, onClose: onToolsModalClose } = useDisclosure();
 
   // Fetch flow data if editing an existing flow
   useEffect(() => {
     if (!isNewFlow) {
-      const fetchFlowData = async () => {
-        setIsLoading(true);
-        try {
-          const response = await apiService.flows.getById(flowId);
-          setFlowData(response.data);
-          
-          // Set the framework from the flow data
-          if (response.data.framework) {
-            setSelectedFramework(response.data.framework);
-          }
-        } catch (error) {
-          toast({
-            title: 'Error fetching flow',
-            description: error.response?.data?.detail || 'Could not load flow data',
-            status: 'error',
-            duration: 5000,
-            isClosable: true,
-          });
-          // Redirect to flows list on error
-          navigate('/flows');
-        } finally {
-          setIsLoading(false);
-        }
-      };
-
       fetchFlowData();
     }
-  }, [flowId, isNewFlow, navigate, toast]);
+  }, [flowId, isNewFlow]);
+
+  const fetchFlowData = async () => {
+    setIsLoading(true);
+    try {
+      const response = await apiService.flows.getById(flowId);
+      setFlowData(response.data);
+      
+      // Set the framework from the flow data
+      if (response.data.framework) {
+        setSelectedFramework(response.data.framework);
+      }
+      
+      // Set selected tools from flow data
+      if (response.data.tools) {
+        setSelectedTools(Object.entries(response.data.tools).map(([name, config]) => ({
+          id: name,
+          name,
+          description: config.description || "",
+          config: config.config || {}
+        })));
+      }
+    } catch (error) {
+      toast({
+        title: 'Error fetching flow',
+        description: error.response?.data?.detail || 'Could not load flow data',
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      });
+      // Redirect to flows list on error
+      navigate('/flows');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // Handle flow save
-  const handleFlowSave = (savedFlowId, flowConfig) => {
-    // If this was a new flow, redirect to the edit page for the new flow
-    if (isNewFlow) {
-      navigate(`/flows/${savedFlowId}`);
+  const handleFlowSave = async (flowConfig) => {
+    setIsSaving(true);
+    try {
+      // Add tools to the flow configuration
+      const flowWithTools = {
+        ...flowConfig,
+        framework: selectedFramework,
+        tools: selectedTools.reduce((acc, tool) => {
+          acc[tool.name] = {
+            description: tool.description,
+            config: tool.config || {}
+          };
+          return acc;
+        }, {})
+      };
+      
+      let response;
+      if (isNewFlow) {
+        response = await apiService.flows.create(flowWithTools);
+      } else {
+        response = await apiService.flows.update(flowId, flowWithTools);
+      }
+      
+      toast({
+        title: 'Success',
+        description: `Flow ${isNewFlow ? 'created' : 'updated'} successfully`,
+        status: 'success',
+        duration: 3000,
+        isClosable: true,
+      });
+      
+      // If this was a new flow, redirect to the edit page for the new flow
+      if (isNewFlow && response.data.flow_id) {
+        navigate(`/flows/${response.data.flow_id}`);
+      }
+    } catch (error) {
+      toast({
+        title: 'Error saving flow',
+        description: error.response?.data?.detail || 'Failed to save flow',
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      });
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -89,6 +152,9 @@ const FlowEditor = () => {
   const handleFrameworkChange = (newFramework) => {
     if (newFramework !== selectedFramework) {
       setSelectedFramework(newFramework);
+      
+      // Reset selected tools when changing frameworks
+      setSelectedTools([]);
       
       toast({
         title: `Framework changed to ${newFramework}`,
@@ -98,11 +164,12 @@ const FlowEditor = () => {
         isClosable: true,
       });
     }
+    onFrameworkModalClose();
   };
-
-  // Open framework selection modal
-  const handleOpenFrameworkModal = () => {
-    onOpen();
+  
+  // Handle tools change
+  const handleToolsChange = (tools) => {
+    setSelectedTools(tools);
   };
 
   // Agent types that can be dragged onto the canvas
@@ -142,24 +209,43 @@ const FlowEditor = () => {
         <Heading size="lg">
           {isNewFlow ? 'Create New Flow' : `Edit Flow: ${flowData?.name || ''}`}
         </Heading>
-        <Button 
-          leftIcon={<FiSettings />} 
-          onClick={handleOpenFrameworkModal}
-          colorScheme="blue"
-          variant="outline"
-        >
-          Framework: {selectedFramework}
-        </Button>
+        <HStack>
+          <Button 
+            leftIcon={<FiTool />} 
+            onClick={onToolsModalOpen}
+            colorScheme="blue"
+            variant="outline"
+          >
+            Configure Tools {selectedTools.length > 0 && `(${selectedTools.length})`}
+          </Button>
+          <Button 
+            leftIcon={<FiSettings />} 
+            onClick={onFrameworkModalOpen}
+            colorScheme="blue"
+            variant="outline"
+          >
+            Framework: {selectedFramework}
+          </Button>
+        </HStack>
       </Flex>
 
-      {/* Framework alert for new flows */}
-      {isNewFlow && (
-        <Alert status="info" mb={6} borderRadius="md">
-          <AlertIcon />
-          <Text>You are creating a flow using the <strong>{selectedFramework}</strong> framework. You can change the framework by clicking the button above.</Text>
-        </Alert>
-      )}
+      {/* Framework/Tools info */}
+      <Card mb={6}>
+        <CardBody>
+          <Flex justify="space-between" align="center">
+            <HStack>
+              <Text fontWeight="medium">Framework:</Text>
+              <Badge colorScheme="blue">{selectedFramework}</Badge>
+            </HStack>
+            <HStack>
+              <Text fontWeight="medium">Tools:</Text>
+              <Badge colorScheme="green">{selectedTools.length}</Badge>
+            </HStack>
+          </Flex>
+        </CardBody>
+      </Card>
 
+      {/* Main Editor UI */}
       <Flex>
         {/* Agent palette */}
         <VStack
@@ -216,16 +302,21 @@ const FlowEditor = () => {
           ) : (
             <FlowBuilder
               flowId={flowId}
-              initialData={flowData ? { ...flowData, framework: selectedFramework } : { framework: selectedFramework }}
+              initialData={{
+                ...(flowData || {}),
+                framework: selectedFramework,
+                tools: selectedTools
+              }}
               onSave={handleFlowSave}
               framework={selectedFramework}
+              isSaving={isSaving}
             />
           )}
         </Box>
       </Flex>
 
       {/* Framework Selection Modal */}
-      <Modal isOpen={isOpen} onClose={onClose} size="xl">
+      <Modal isOpen={isFrameworkModalOpen} onClose={onFrameworkModalClose} size="xl">
         <ModalOverlay />
         <ModalContent>
           <ModalHeader>Select Framework</ModalHeader>
@@ -240,7 +331,31 @@ const FlowEditor = () => {
             />
           </ModalBody>
           <ModalFooter>
-            <Button colorScheme="blue" onClick={onClose}>
+            <Button colorScheme="blue" onClick={onFrameworkModalClose}>
+              Done
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+
+      {/* Tools Configuration Modal */}
+      <Modal isOpen={isToolsModalOpen} onClose={onToolsModalClose} size="xl">
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>Configure Flow Tools</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody>
+            <Text mb={4}>
+              Select and configure the tools that will be available to agents in this flow.
+            </Text>
+            <FlowToolConfiguration
+              selectedTools={selectedTools}
+              framework={selectedFramework}
+              onToolsChange={handleToolsChange}
+            />
+          </ModalBody>
+          <ModalFooter>
+            <Button colorScheme="blue" onClick={onToolsModalClose}>
               Done
             </Button>
           </ModalFooter>
