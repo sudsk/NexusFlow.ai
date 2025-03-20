@@ -46,6 +46,7 @@ import NodePropertiesPanel from './NodePropertiesPanel';
 import FlowPropertiesPanel from './FlowPropertiesPanel';
 import FlowTestConsole from './FlowTestConsole';
 import FlowToolConfiguration from './FlowToolConfiguration';
+import apiService from '../services/api';
 
 // Define custom node types
 const nodeTypes = {
