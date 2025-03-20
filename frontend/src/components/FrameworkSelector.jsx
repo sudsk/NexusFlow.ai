@@ -11,14 +11,18 @@ import {
   HStack,
   VStack,
   Flex,
-  Image,
-  Spinner,
   Icon,
+  Spinner,
   useRadioGroup,
   useColorModeValue,
   useToast,
+  Accordion,
+  AccordionItem,
+  AccordionButton,
+  AccordionPanel,
+  AccordionIcon,
 } from '@chakra-ui/react';
-import { FiCheck, FiCpu, FiUsers, FiCodepen, FiZap, FiTool, FiActivity } from 'react-icons/fi';
+import { FiCheck, FiCpu, FiUsers, FiCodepen, FiZap, FiTool, FiActivity, FiInfo } from 'react-icons/fi';
 import apiService from '../services/api';
 
 // Custom radio card component
@@ -113,6 +117,7 @@ const RadioCard = ({ children, isChecked, framework, onSelect, ...rest }) => {
 const FrameworkSelector = ({ value, onChange }) => {
   const [frameworks, setFrameworks] = useState({});
   const [isLoading, setIsLoading] = useState(true);
+  const [expandedFramework, setExpandedFramework] = useState(null);
   const toast = useToast();
 
   useEffect(() => {
@@ -191,6 +196,57 @@ const FrameworkSelector = ({ value, onChange }) => {
     dspy: "DSPy provides a more programmatic approach to multi-stage reasoning"
   };
 
+  // Framework detailed information
+  const frameworkDetails = {
+    langgraph: {
+      pros: [
+        "Strong state management capabilities",
+        "Support for complex agent interactions",
+        "Parallel execution of agent tasks",
+        "Stream responses in real-time",
+        "Detailed execution tracing",
+      ],
+      cons: [
+        "More complex setup for simple scenarios",
+        "Steeper learning curve"
+      ],
+      bestFor: [
+        "Complex multi-step reasoning",
+        "State-dependent agent workflows",
+        "Applications requiring traceability",
+        "Parallel processing of tasks"
+      ]
+    },
+    crewai: {
+      pros: [
+        "Intuitive agent role definitions",
+        "Simple collaboration patterns",
+        "Human-like delegation between agents",
+        "Easy to understand agent relationships"
+      ],
+      cons: [
+        "Limited parallel processing",
+        "Less granular control over execution",
+        "No streaming support"
+      ],
+      bestFor: [
+        "Team-based agent collaboration",
+        "Role-specialized workflows",
+        "Human-like delegation patterns",
+        "Simpler, sequential workflows"
+      ]
+    }
+  };
+
+  // Toggle expanded framework details
+  const toggleDetails = (framework) => {
+    if (expandedFramework === framework) {
+      setExpandedFramework(null);
+    } else {
+      setExpandedFramework(framework);
+    }
+  };
+
   if (isLoading) {
     return (
       <Flex justify="center" align="center" h="200px">
@@ -200,29 +256,102 @@ const FrameworkSelector = ({ value, onChange }) => {
   }
 
   return (
-    <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4} mt={4} {...group}>
-      {Object.keys(frameworks).map((framework) => {
-        const radio = getRadioProps({ value: framework });
-        
-        return (
-          <RadioCard
-            key={framework}
-            {...radio}
-            isChecked={value === framework}
-            framework={framework}
-            onSelect={onChange}
-          >
-            <VStack align="start" spacing={1}>
-              <Text color="gray.600" fontSize="sm">
-                {descriptions[framework] || `${framework} framework`}
-              </Text>
-              
-              {renderFeatureTags(frameworks[framework])}
-            </VStack>
-          </RadioCard>
-        );
-      })}
-    </SimpleGrid>
+    <Box>
+      <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4} mt={4} {...group}>
+        {Object.keys(frameworks).map((framework) => {
+          const radio = getRadioProps({ value: framework });
+          
+          return (
+            <RadioCard
+              key={framework}
+              {...radio}
+              isChecked={value === framework}
+              framework={framework}
+              onSelect={onChange}
+            >
+              <VStack align="start" spacing={1}>
+                <Text color="gray.600" fontSize="sm">
+                  {descriptions[framework] || `${framework} framework`}
+                </Text>
+                
+                {renderFeatureTags(frameworks[framework])}
+                
+                {frameworkDetails[framework] && (
+                  <Box w="100%" mt={2}>
+                    <Box 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleDetails(framework);
+                      }}
+                      cursor="pointer"
+                      color="blue.500"
+                      fontSize="sm"
+                      fontWeight="medium"
+                      mt={1}
+                    >
+                      <HStack>
+                        <Icon as={FiInfo} />
+                        <Text>{expandedFramework === framework ? "Hide details" : "Show details"}</Text>
+                      </HStack>
+                    </Box>
+                    
+                    {expandedFramework === framework && (
+                      <Accordion allowToggle mt={2} onClick={(e) => e.stopPropagation()}>
+                        <AccordionItem border="none">
+                          <AccordionButton px={0} _hover={{ bg: 'transparent' }}>
+                            <Box as="span" flex='1' textAlign='left' fontWeight="medium">
+                              Best For
+                            </Box>
+                            <AccordionIcon />
+                          </AccordionButton>
+                          <AccordionPanel pb={2} pt={0}>
+                            <VStack align="start" spacing={1}>
+                              {frameworkDetails[framework].bestFor.map((item, idx) => (
+                                <Text key={idx} fontSize="sm">• {item}</Text>
+                              ))}
+                            </VStack>
+                          </AccordionPanel>
+                        </AccordionItem>
+
+                        <AccordionItem border="none">
+                          <AccordionButton px={0} _hover={{ bg: 'transparent' }}>
+                            <Box as="span" flex='1' textAlign='left' fontWeight="medium">
+                              Pros & Cons
+                            </Box>
+                            <AccordionIcon />
+                          </AccordionButton>
+                          <AccordionPanel pb={2} pt={0}>
+                            <VStack align="start" spacing={2} width="100%">
+                              <Box width="100%">
+                                <Text fontSize="sm" fontWeight="medium" color="green.500">Pros:</Text>
+                                <VStack align="start" spacing={1}>
+                                  {frameworkDetails[framework].pros.map((item, idx) => (
+                                    <Text key={idx} fontSize="sm">• {item}</Text>
+                                  ))}
+                                </VStack>
+                              </Box>
+                              
+                              <Box width="100%">
+                                <Text fontSize="sm" fontWeight="medium" color="red.500">Cons:</Text>
+                                <VStack align="start" spacing={1}>
+                                  {frameworkDetails[framework].cons.map((item, idx) => (
+                                    <Text key={idx} fontSize="sm">• {item}</Text>
+                                  ))}
+                                </VStack>
+                              </Box>
+                            </VStack>
+                          </AccordionPanel>
+                        </AccordionItem>
+                      </Accordion>
+                    )}
+                  </Box>
+                )}
+              </VStack>
+            </RadioCard>
+          );
+        })}
+      </SimpleGrid>
+    </Box>
   );
 };
 
