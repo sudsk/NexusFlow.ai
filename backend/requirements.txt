@@ -1,0 +1,30 @@
+# Core dependencies
+fastapi>=0.103.1
+uvicorn>=0.23.2
+pydantic>=2.4.0
+sqlalchemy>=2.0.20
+psycopg2>=2.9.7
+alembic>=1.12.0
+python-dotenv>=1.0.0
+httpx>=0.24.1
+aiohttp>=3.8.5
+asyncio>=3.4.3
+requests>=2.31.0
+
+# LLM and Framework dependencies
+langchain>=0.0.312
+openai>=0.28.0
+anthropic>=0.5.0
+google-api-python-client>=2.100.0
+tiktoken>=0.5.1
+crewai>=0.28.0  # Optional, can be commented out if not using CrewAI
+
+# Testing
+pytest>=7.4.2
+pytest-asyncio>=0.21.1
+
+# Development tools
+black>=23.7.0
+isort>=5.12.0
+flake8>=6.1.0
+mypy>=1.5.1
