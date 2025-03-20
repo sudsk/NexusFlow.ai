@@ -1,52 +1,35 @@
-# backend/api/routes/execution_routes.py
-from fastapi import APIRouter, Depends, HTTPException, status
-from typing import Dict, Any
-from sqlalchemy.orm import Session
-
-from ...db.session import get_db
-from ...services.execution.execution_service import ExecutionService
-from ...db.repositories.flow_repository import FlowRepository
-from ...db.repositories.execution_repository import ExecutionRepository
-from ..models.execution_models import (
-    ExecutionRequest,
-    ExecutionResponse,
-    ExecutionDetailsResponse
-)
-
-router = APIRouter(prefix="/executions", tags=["executions"])
-
-def get_execution_service(db: Session = Depends(get_db)):
-    flow_repo = FlowRepository(db)
-    execution_repo = ExecutionRepository(db)
-    return ExecutionService(flow_repo, execution_repo)
-
-@router.post("/", response_model=ExecutionResponse)
-async def execute_flow(
-    request: ExecutionRequest,
+# backend/api/routes/execution_routes.py 
+@router.get("/flow/{flow_id}", response_model=ExecutionListResponse)
+async def get_flow_executions(
+    flow_id: str,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
     execution_service: ExecutionService = Depends(get_execution_service)
 ):
-    try:
-        result = await execution_service.execute_flow(
-            flow_id=request.flow_id,
-            input_data=request.input,
-            framework=request.framework
-        )
-        
-        return result
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    """Get executions for a specific flow"""
+    executions = await execution_service.get_flow_executions(flow_id, skip, limit)
+    
+    return ExecutionListResponse(
+        items=executions,
+        total=len(executions)  # In a real implementation, this would be a count query
+    )
 
-@router.get("/{execution_id}", response_model=ExecutionDetailsResponse)
-async def get_execution(
-    execution_id: str,
-    db: Session = Depends(get_db)
+@router.get("/", response_model=ExecutionListResponse)
+async def get_recent_executions(
+    limit: int = Query(10, ge=1, le=50),
+    execution_service: ExecutionService = Depends(get_execution_service)
 ):
-    execution_repo = ExecutionRepository(db)
-    execution = execution_repo.get_by_id(execution_id)
+    """Get recent executions across all flows"""
+    executions = await execution_service.get_recent_executions(limit)
     
-    if not execution:
-        raise HTTPException(status_code=404, detail=f"Execution with ID {execution_id} not found")
-    
-    return execution
+    return ExecutionListResponse(
+        items=executions,
+        total=len(executions)
+    )
+
+@router.get("/stats", response_model=Dict[str, Any])
+async def get_execution_stats(
+    execution_service: ExecutionService = Depends(get_execution_service)
+):
+    """Get execution statistics"""
+    return await execution_service.get_execution_stats()
