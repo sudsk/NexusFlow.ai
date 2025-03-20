@@ -67,9 +67,48 @@ const ExecutionsPage = () => {
   const cardBg = useColorModeValue('white', 'gray.700');
   const borderColor = useColorModeValue('gray.200', 'gray.600');
   
-  useEffect(() => {
-    fetchExecutions();
-  }, []);
+  // Helper function to get status color
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'completed': return 'green';
+      case 'failed': return 'red';
+      case 'running': return 'blue';
+      case 'pending': return 'orange';
+      default: return 'gray';
+    }
+  };
+  
+  // Helper function to get status icon
+  const getStatusIcon = (status) => {
+    switch (status) {
+      case 'completed': return FiCheck;
+      case 'failed': return FiX;
+      case 'running': case 'pending': return FiClock;
+      default: return FiActivity;
+    }
+  };
+  
+  // Helper function to get framework icon
+  const getFrameworkIcon = (framework) => {
+    switch (framework) {
+      case 'langgraph': return FiActivity;
+      case 'crewai': return FiUsers;
+      case 'autogen': return FiCpu;
+      case 'dspy': return FiCode;
+      default: return FiActivity;
+    }
+  };
+  
+  // Helper function to get framework color
+  const getFrameworkColor = (framework) => {
+    switch (framework) {
+      case 'langgraph': return 'blue';
+      case 'crewai': return 'purple';
+      case 'autogen': return 'green';
+      case 'dspy': return 'orange';
+      default: return 'gray';
+    }
+  };
   
   const fetchExecutions = async () => {
     setIsLoading(true);
@@ -174,6 +213,97 @@ const ExecutionsPage = () => {
     }
   };
   
+  const handleRefresh = () => {
+    fetchExecutions();
+  };
+  
+  const handleFilterChange = (field, value) => {
+    setFilter({
+      ...filter,
+      [field]: value
+    });
+  };
+  
+  const handleViewExecution = (executionId) => {
+    navigate(`/executions/${executionId}`);
+  };
+  
+  const handleDeleteExecution = (executionId) => {
+    // In a real implementation, this would call the API
+    toast({
+      title: 'Execution deleted',
+      description: `Execution ${executionId} has been deleted`,
+      status: 'success',
+      duration: 3000,
+      isClosable: true,
+    });
+    
+    // Remove from state
+    setExecutions(executions.filter(exec => exec.id !== executionId));
+  };
+  
+  const handleDownloadResults = (execution) => {
+    // Create a JSON blob with execution results
+    const data = {
+      id: execution.id,
+      flow_name: execution.flow_name,
+      framework: execution.framework,
+      input: execution.input,
+      result: execution.result || { error: execution.error },
+      started_at: execution.started_at,
+      completed_at: execution.completed_at,
+      status: execution.status,
+      steps: execution.steps
+    };
+    
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    
+    // Create a link and trigger download
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `execution-${execution.id}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    toast({
+      title: 'Results downloaded',
+      status: 'success',
+      duration: 2000,
+      isClosable: true,
+    });
+  };
+  
+  useEffect(() => {
+    fetchExecutions();
+  }, []);
+  
+  // Apply filters to executions
+  const filteredExecutions = executions.filter(exec => {
+    // Framework filter
+    if (filter.framework && exec.framework !== filter.framework) {
+      return false;
+    }
+    
+    // Status filter
+    if (filter.status && exec.status !== filter.status) {
+      return false;
+    }
+    
+    // Query filter (search in flow_name and input)
+    if (filter.query) {
+      const query = filter.query.toLowerCase();
+      const flowNameMatch = exec.flow_name.toLowerCase().includes(query);
+      const inputMatch = exec.input?.query?.toLowerCase().includes(query);
+      
+      return flowNameMatch || inputMatch;
+    }
+    
+    return true;
+  });
+
   return (
     <Box>
       <Flex justify="space-between" align="center" mb={6}>
@@ -380,133 +510,6 @@ const ExecutionsPage = () => {
       </Card>
     </Box>
   );
-  
-  const handleRefresh = () => {
-    fetchExecutions();
-  };
-  
-  const handleFilterChange = (field, value) => {
-    setFilter({
-      ...filter,
-      [field]: value
-    });
-  };
-  
-  const handleViewExecution = (executionId) => {
-    navigate(`/executions/${executionId}`);
-  };
-  
-  const handleDeleteExecution = (executionId) => {
-    // In a real implementation, this would call the API
-    toast({
-      title: 'Execution deleted',
-      description: `Execution ${executionId} has been deleted`,
-      status: 'success',
-      duration: 3000,
-      isClosable: true,
-    });
-    
-    // Remove from state
-    setExecutions(executions.filter(exec => exec.id !== executionId));
-  };
-  
-  const handleDownloadResults = (execution) => {
-    // Create a JSON blob with execution results
-    const data = {
-      id: execution.id,
-      flow_name: execution.flow_name,
-      framework: execution.framework,
-      input: execution.input,
-      result: execution.result || { error: execution.error },
-      started_at: execution.started_at,
-      completed_at: execution.completed_at,
-      status: execution.status,
-      steps: execution.steps
-    };
-    
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    
-    // Create a link and trigger download
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `execution-${execution.id}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    
-    toast({
-      title: 'Results downloaded',
-      status: 'success',
-      duration: 2000,
-      isClosable: true,
-    });
-  };
-  
-  // Apply filters to executions
-  const filteredExecutions = executions.filter(exec => {
-    // Framework filter
-    if (filter.framework && exec.framework !== filter.framework) {
-      return false;
-    }
-    
-    // Status filter
-    if (filter.status && exec.status !== filter.status) {
-      return false;
-    }
-    
-    // Query filter (search in flow_name and input)
-    if (filter.query) {
-      const query = filter.query.toLowerCase();
-      const flowNameMatch = exec.flow_name.toLowerCase().includes(query);
-      const inputMatch = exec.input?.query?.toLowerCase().includes(query);
-      
-      return flowNameMatch || inputMatch;
-    }
-    
-    return true;
-  });
-  
-  // Helper function to get status color
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'completed': return 'green';
-      case 'failed': return 'red';
-      case 'running': return 'blue';
-      case 'pending': return 'orange';
-      default: return 'gray';
-    }
-  };
-  
-  // Helper function to get status icon
-  const getStatusIcon = (status) => {
-    switch (status) {
-      case 'completed': return FiCheck;
-      case 'failed': return FiX;
-      case 'running': case 'pending': return FiClock;
-      default: return FiActivity;
-    }
-  };
-  
-  // Helper function to get framework icon
-  const getFrameworkIcon = (framework) => {
-    switch (framework) {
-      case 'langgraph': return FiActivity;
-      case 'crewai': return FiUsers;
-      case 'autogen': return FiCpu;
-      case 'dspy': return FiCode;
-      default: return FiActivity;
-    }
-  };
-  
-  // Helper function to get framework color
-  const getFrameworkColor = (framework) => {
-    switch (framework) {
-      case 'langgraph': return 'blue';
-      case 'crewai': return 'purple';
-      case 'autogen': return 'green';
-      case 'dspy': return 'orange';
-      default: return 'gray';
-    }
-  }
+};
+
+export default ExecutionsPage;
