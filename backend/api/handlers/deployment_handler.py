@@ -123,4 +123,77 @@ async def update_deployment(
     
     return deployment
 
-@router.delete("
+@router.delete("/{deployment_id}")
+async def delete_deployment(
+    deployment_id: str,
+    deployment_service: DeploymentService = Depends(get_deployment_service),
+    user_info: dict = Depends(verify_api_key)  # Require authentication
+):
+    """Delete a deployment"""
+    success = await deployment_service.delete_deployment(deployment_id)
+    
+    if not success:
+        raise HTTPException(status_code=404, detail=f"Deployment with ID {deployment_id} not found")
+    
+    return {"message": f"Deployment with ID {deployment_id} successfully deleted"}
+
+@router.post("/{deployment_id}/deactivate")
+async def deactivate_deployment(
+    deployment_id: str,
+    deployment_service: DeploymentService = Depends(get_deployment_service),
+    user_info: dict = Depends(verify_api_key)  # Require authentication
+):
+    """Deactivate a deployment"""
+    success = await deployment_service.deactivate_deployment(deployment_id)
+    
+    if not success:
+        raise HTTPException(status_code=404, detail=f"Deployment with ID {deployment_id} not found")
+    
+    return {"message": f"Deployment with ID {deployment_id} successfully deactivated"}
+
+@router.post("/{deployment_id}/execute", response_model=ExecutionResponse)
+async def execute_deployment(
+    deployment_id: str,
+    request: ExecutionRequest,
+    background_tasks: BackgroundTasks,
+    deployment_service: DeploymentService = Depends(get_deployment_service),
+    execution_service: ExecutionService = Depends(get_execution_service),
+    user_info: dict = Depends(verify_api_key)  # Require authentication
+):
+    """Execute a deployment
+    
+    This executes a deployed flow with the provided input.
+    """
+    try:
+        # Get deployment
+        deployment = await deployment_service.get_deployment(deployment_id)
+        
+        if not deployment:
+            raise HTTPException(status_code=404, detail=f"Deployment with ID {deployment_id} not found")
+            
+        # Check if deployment is active
+        if deployment["status"] != "active":
+            raise HTTPException(status_code=400, detail=f"Deployment with ID {deployment_id} is not active")
+            
+        # Get flow ID from deployment
+        flow_id = deployment["flow_id"]
+        
+        # Execute flow
+        result = await execution_service.execute_flow(
+            flow_id=flow_id,
+            input_data=request.input,
+            framework=request.framework,
+            streaming=True  # Run in background
+        )
+        
+        return ExecutionResponse(
+            execution_id=result.get("execution_id", "unknown"),
+            status="started",
+            result=None
+        )
+    except ValueError as e:
+        logger.warning(f"Invalid execution request: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.exception(f"Error executing deployment: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
