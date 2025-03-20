@@ -4,6 +4,7 @@ import sys
 import pytest
 import asyncio
 from unittest.mock import MagicMock, patch
+from datetime import datetime
 
 # Add parent directory to path so we can import backend modules
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -12,6 +13,7 @@ from backend.core.entities.flow import Flow
 from backend.services.flow.flow_service import FlowService
 from backend.services.execution.execution_service import ExecutionService
 from backend.services.tool.tool_service import ToolService
+from backend.services.deployment.deployment_service import DeploymentService
 
 
 class TestFlowService:
@@ -41,7 +43,8 @@ class TestFlowService:
         mock_adapter_registry.get_adapter.return_value = mock_adapter
         
         # Create service with mocks
-        flow_service = FlowService(mock_flow_repo, mock_adapter_registry)
+        flow_service = FlowService(mock_flow_repo)
+        flow_service.adapter_registry = mock_adapter_registry
         
         # Test data
         flow_data = {
@@ -84,7 +87,8 @@ class TestFlowService:
         mock_adapter_registry.get_adapter.return_value = mock_adapter
         
         # Create service with mocks
-        flow_service = FlowService(mock_flow_repo, mock_adapter_registry)
+        flow_service = FlowService(mock_flow_repo)
+        flow_service.adapter_registry = mock_adapter_registry
         
         # Test data
         flow_data = {
@@ -106,7 +110,110 @@ class TestFlowService:
         assert validation_result is not None
         assert validation_result["valid"] is True
         assert len(validation_result["warnings"]) == 1
+        assert mock_adapter_registry.get_adapter.called
         assert mock_adapter.validate_flow.called
+
+    @pytest.mark.asyncio
+    async def test_update_flow(self):
+        # Mock repository
+        mock_flow_repo = MagicMock()
+        mock_flow_repo.get_by_id.return_value = Flow(
+            flow_id="test-flow-id",
+            name="Original Flow",
+            framework="langgraph",
+            agents=[{
+                "name": "Test Agent",
+                "model_provider": "openai",
+                "model_name": "gpt-4"
+            }]
+        )
+        mock_flow_repo.update.return_value = Flow(
+            flow_id="test-flow-id",
+            name="Updated Flow",
+            framework="langgraph",
+            agents=[{
+                "name": "Test Agent",
+                "model_provider": "openai",
+                "model_name": "gpt-4"
+            }]
+        )
+        
+        # Mock adapter registry
+        mock_adapter_registry = MagicMock()
+        mock_adapter = MagicMock()
+        mock_adapter.get_framework_name.return_value = "langgraph"
+        mock_adapter_registry.get_adapter.return_value = mock_adapter
+        
+        # Create service with mocks
+        flow_service = FlowService(mock_flow_repo)
+        flow_service.adapter_registry = mock_adapter_registry
+        
+        # Call service method
+        updated_flow = await flow_service.update_flow("test-flow-id", {"name": "Updated Flow"})
+        
+        # Verify
+        assert updated_flow is not None
+        assert updated_flow.name == "Updated Flow"
+        assert mock_flow_repo.get_by_id.called
+        assert mock_flow_repo.update.called
+
+    @pytest.mark.asyncio
+    async def test_delete_flow(self):
+        # Mock repository
+        mock_flow_repo = MagicMock()
+        mock_flow_repo.delete.return_value = True
+        
+        # Mock adapter registry
+        mock_adapter_registry = MagicMock()
+        
+        # Create service with mocks
+        flow_service = FlowService(mock_flow_repo)
+        flow_service.adapter_registry = mock_adapter_registry
+        
+        # Call service method
+        result = await flow_service.delete_flow("test-flow-id")
+        
+        # Verify
+        assert result is True
+        assert mock_flow_repo.delete.called
+        mock_flow_repo.delete.assert_called_with("test-flow-id")
+
+    @pytest.mark.asyncio
+    async def test_export_flow(self):
+        # Mock repository
+        mock_flow_repo = MagicMock()
+        mock_flow_repo.get_by_id.return_value = Flow(
+            flow_id="test-flow-id",
+            name="Test Flow",
+            framework="langgraph",
+            agents=[{
+                "name": "Test Agent",
+                "model_provider": "openai",
+                "model_name": "gpt-4"
+            }]
+        )
+        
+        # Mock adapter registry
+        mock_adapter_registry = MagicMock()
+        mock_adapter = MagicMock()
+        mock_adapter.convert_flow.return_value = {"converted": "flow-data"}
+        mock_adapter_registry.get_adapter.return_value = mock_adapter
+        
+        # Create service with mocks
+        flow_service = FlowService(mock_flow_repo)
+        flow_service.adapter_registry = mock_adapter_registry
+        
+        # Call service method
+        result = await flow_service.export_flow("test-flow-id", "crewai")
+        
+        # Verify
+        assert result is not None
+        assert result["flow_id"] == "test-flow-id"
+        assert result["target_framework"] == "crewai"
+        assert "exported_config" in result
+        assert mock_flow_repo.get_by_id.called
+        assert mock_adapter_registry.get_adapter.called
+        assert mock_adapter.convert_flow.called
 
 
 class TestExecutionService:
@@ -127,7 +234,14 @@ class TestExecutionService:
         mock_flow_repo.get_by_id.return_value = mock_flow
         
         mock_execution_repo = MagicMock()
-        mock_execution_repo.create.return_value = MagicMock(id="test-execution-id")
+        mock_execution = MagicMock(
+            id="test-execution-id",
+            flow_id="test-flow-id",
+            framework="langgraph",
+            status="pending",
+            started_at=datetime.utcnow()
+        )
+        mock_execution_repo.create.return_value = mock_execution
         
         # Mock adapter registry
         mock_adapter_registry = MagicMock()
@@ -135,8 +249,8 @@ class TestExecutionService:
         mock_adapter.convert_flow.return_value = {"type": "langgraph_flow"}
         mock_adapter.execute_flow.return_value = {
             "output": {"content": "Test result"},
-            "execution_trace": [],
-            "steps": 3
+            "execution_trace": [{"step": 1, "type": "agent_execution"}],
+            "steps": 1
         }
         mock_adapter_registry.get_adapter.return_value = mock_adapter
         
@@ -157,10 +271,79 @@ class TestExecutionService:
         # Verify
         assert result is not None
         assert "execution_id" in result
+        assert result["status"] == "completed"
+        assert "result" in result
         assert mock_flow_repo.get_by_id.called
         assert mock_execution_repo.create.called
+        assert mock_execution_repo.update.called
         assert mock_adapter.convert_flow.called
         assert mock_adapter.execute_flow.called
+
+    @pytest.mark.asyncio
+    async def test_get_execution_status(self):
+        # Mock repository
+        mock_flow_repo = MagicMock()
+        mock_execution_repo = MagicMock()
+        mock_execution = MagicMock(
+            id="test-execution-id",
+            flow_id="test-flow-id",
+            framework="langgraph",
+            status="completed",
+            started_at=datetime.utcnow(),
+            completed_at=datetime.utcnow(),
+            result={"output": {"content": "Test result"}},
+            execution_trace=[{"step": 1, "type": "agent_execution"}]
+        )
+        mock_execution_repo.get_by_id.return_value = mock_execution
+        
+        # Create service with mocks
+        execution_service = ExecutionService(
+            flow_repository=mock_flow_repo,
+            execution_repository=mock_execution_repo
+        )
+        
+        # Call service method
+        result = await execution_service.get_execution_status("test-execution-id")
+        
+        # Verify
+        assert result is not None
+        assert result["id"] == "test-execution-id"
+        assert result["status"] == "completed"
+        assert "result" in result
+        assert "execution_trace" in result
+        assert mock_execution_repo.get_by_id.called
+        mock_execution_repo.get_by_id.assert_called_with("test-execution-id")
+
+    @pytest.mark.asyncio
+    async def test_get_flow_executions(self):
+        # Mock repository
+        mock_flow_repo = MagicMock()
+        mock_execution_repo = MagicMock()
+        mock_executions = [
+            MagicMock(
+                id=f"execution-{i}",
+                flow_id="test-flow-id",
+                status="completed",
+                started_at=datetime.utcnow(),
+                completed_at=datetime.utcnow()
+            ) for i in range(3)
+        ]
+        mock_execution_repo.get_by_flow_id.return_value = mock_executions
+        
+        # Create service with mocks
+        execution_service = ExecutionService(
+            flow_repository=mock_flow_repo,
+            execution_repository=mock_execution_repo
+        )
+        
+        # Call service method
+        results = await execution_service.get_flow_executions("test-flow-id")
+        
+        # Verify
+        assert results is not None
+        assert len(results) == 3
+        assert mock_execution_repo.get_by_flow_id.called
+        mock_execution_repo.get_by_flow_id.assert_called_with("test-flow-id", 0, 100, None)
 
 
 class TestToolService:
@@ -175,7 +358,7 @@ class TestToolService:
                 description="Search the web",
                 parameters={"type": "object"},
                 is_enabled=True,
-                metadata={"compatible_frameworks": ["langgraph", "crewai"]}
+                metadata={"compatible_frameworks": ["langgraph", "crewai", "autogen"]}
             ),
             MagicMock(
                 id="tool-2",
@@ -189,6 +372,16 @@ class TestToolService:
         
         # Create service with mock
         tool_service = ToolService(mock_tool_repo)
+        
+        # Add mock for convert_to_dict method
+        tool_service._convert_to_dict = lambda tool: {
+            "id": tool.id,
+            "name": tool.name,
+            "description": tool.description,
+            "parameters": tool.parameters,
+            "is_enabled": tool.is_enabled,
+            "metadata": tool.metadata
+        }
         
         # Call service method
         tools = await tool_service.get_all_tools()
@@ -303,3 +496,109 @@ class TestToolService:
         # Test with enabled_only=False
         all_langgraph_tools = await tool_service.get_available_tools_for_flow("langgraph", enabled_only=False)
         assert len(all_langgraph_tools) == 3  # Should include the disabled tool
+
+
+class TestDeploymentService:
+    @pytest.mark.asyncio
+    async def test_deploy_flow(self):
+        # Mock repositories
+        mock_flow_repo = MagicMock()
+        mock_flow_repo.get_by_id.return_value = Flow(
+            flow_id="test-flow-id",
+            name="Test Flow",
+            framework="langgraph",
+            agents=[{
+                "name": "Test Agent",
+                "model_provider": "openai",
+                "model_name": "gpt-4"
+            }]
+        )
+        
+        mock_deployment_repo = MagicMock()
+        mock_deployment = MagicMock(
+            id="test-deployment-id",
+            flow_id="test-flow-id",
+            name="Test Deployment",
+            version="v1",
+            status="active",
+            api_key="test-api-key",
+            endpoint_url="https://api.nexusflow.ai/flows/test-deployment-id/execute",
+            settings={}
+        )
+        mock_deployment_repo.create.return_value = mock_deployment
+        
+        # Create service with mocks
+        deployment_service = DeploymentService(
+            flow_repository=mock_flow_repo,
+            deployment_repository=mock_deployment_repo
+        )
+        
+        # Test data
+        flow_id = "test-flow-id"
+        deployment_data = {
+            "name": "Test Deployment",
+            "version": "v1",
+            "settings": {}
+        }
+        
+        # Call service method
+        result = await deployment_service.deploy_flow(flow_id, deployment_data)
+        
+        # Verify
+        assert result is not None
+        assert result["flow_id"] == flow_id
+        assert result["name"] == "Test Deployment"
+        assert result["version"] == "v1"
+        assert result["status"] == "active"
+        assert "endpoint_url" in result
+        assert mock_flow_repo.get_by_id.called
+        assert mock_deployment_repo.create.called
+
+    @pytest.mark.asyncio
+    async def test_get_flow_deployments(self):
+        # Mock repositories
+        mock_flow_repo = MagicMock()
+        mock_deployment_repo = MagicMock()
+        mock_deployments = [
+            MagicMock(
+                id=f"deployment-{i}",
+                flow_id="test-flow-id",
+                name=f"Test Deployment {i}",
+                version="v1",
+                status="active",
+                endpoint_url=f"https://api.nexusflow.ai/flows/deployment-{i}/execute"
+            ) for i in range(2)
+        ]
+        mock_deployment_repo.get_by_flow_id.return_value = mock_deployments
+        
+        # Create service with mocks
+        deployment_service = DeploymentService(
+            flow_repository=mock_flow_repo,
+            deployment_repository=mock_deployment_repo
+        )
+        
+        # Override _convert_to_dict to handle mock objects
+        def mock_convert(deployment):
+            return {
+                "id": deployment.id,
+                "flow_id": deployment.flow_id,
+                "name": deployment.name,
+                "version": deployment.version,
+                "status": deployment.status,
+                "endpoint_url": deployment.endpoint_url,
+                "created_at": deployment.created_at.isoformat() if hasattr(deployment, 'created_at') and deployment.created_at else None,
+                "updated_at": deployment.updated_at.isoformat() if hasattr(deployment, 'updated_at') and deployment.updated_at else None,
+                "settings": deployment.settings or {}
+            }
+        
+        deployment_service._convert_to_dict = mock_convert
+        
+        # Call service method
+        results = await deployment_service.get_flow_deployments("test-flow-id")
+        
+        # Verify
+        assert results is not None
+        assert len(results) == 2
+        assert results[0]["flow_id"] == "test-flow-id"
+        assert mock_deployment_repo.get_by_flow_id.called
+        mock_deployment_repo.get_by_flow_id.assert_called_with("test-flow-id")
