@@ -19,10 +19,8 @@ import {
 import { 
   FiHome, 
   FiActivity, 
-  FiCpu, 
   FiServer, 
   FiTool, 
-  FiUsers, 
   FiSettings,
   FiPlay
 } from 'react-icons/fi';
@@ -106,23 +104,17 @@ const Sidebar = () => {
           Dashboard
         </NavItem>
         <NavItem icon={FiActivity} to="/flows" active={isActive('/flows')}>
-          Flows
+          Flow Designer
         </NavItem>
-        <NavItem icon={FiCpu} to="/agents" active={isActive('/agents')}>
-          Agents
+        <NavItem icon={FiPlay} to="/executions" active={isActive('/executions')}>
+          Flow Testing
         </NavItem>
         <NavItem icon={FiTool} to="/tools" active={isActive('/tools')}>
           Tools
         </NavItem>
-        <NavItem icon={FiPlay} to="/executions" active={isActive('/executions')}>
-          Executions
-        </NavItem>
         <Divider my={2} />
         <NavItem icon={FiServer} to="/deployments" active={isActive('/deployments')}>
           Deployments
-        </NavItem>
-        <NavItem icon={FiUsers} to="/capabilities" active={isActive('/capabilities')}>
-          Capabilities
         </NavItem>
         <Divider my={2} />
         <NavItem icon={FiSettings} to="/settings" active={isActive('/settings')}>
@@ -155,23 +147,17 @@ const Sidebar = () => {
               Dashboard
             </NavItem>
             <NavItem icon={FiActivity} to="/flows" active={isActive('/flows')} onClick={onClose}>
-              Flows
+              Flow Designer
             </NavItem>
-            <NavItem icon={FiCpu} to="/agents" active={isActive('/agents')} onClick={onClose}>
-              Agents
+            <NavItem icon={FiPlay} to="/executions" active={isActive('/executions')} onClick={onClose}>
+              Flow Testing
             </NavItem>
             <NavItem icon={FiTool} to="/tools" active={isActive('/tools')} onClick={onClose}>
               Tools
             </NavItem>
-            <NavItem icon={FiPlay} to="/executions" active={isActive('/executions')} onClick={onClose}>
-              Executions
-            </NavItem>
             <Divider my={2} />
             <NavItem icon={FiServer} to="/deployments" active={isActive('/deployments')} onClick={onClose}>
               Deployments
-            </NavItem>
-            <NavItem icon={FiUsers} to="/capabilities" active={isActive('/capabilities')} onClick={onClose}>
-              Capabilities
             </NavItem>
             <Divider my={2} />
             <NavItem icon={FiSettings} to="/settings" active={isActive('/settings')} onClick={onClose}>
