@@ -66,6 +66,7 @@ const ExecutionsPage = () => {
   
   const cardBg = useColorModeValue('white', 'gray.700');
   const borderColor = useColorModeValue('gray.200', 'gray.600');
+  const hoverBgColor = useColorModeValue('gray.50', 'gray.700');  
   
   // Helper function to get status color
   const getStatusColor = (status) => {
@@ -414,7 +415,7 @@ const ExecutionsPage = () => {
               {filteredExecutions.map((execution) => (
                 <Tr 
                   key={execution.id} 
-                  _hover={{ bg: useColorModeValue('gray.50', 'gray.700') }}
+                  _hover={{ bg: hoverBgColor }}
                   cursor="pointer"
                   onClick={() => handleViewExecution(execution.id)}
                 >
