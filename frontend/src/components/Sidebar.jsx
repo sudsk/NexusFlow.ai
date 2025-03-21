@@ -13,7 +13,8 @@ import {
   DrawerContent,
   DrawerCloseButton,
   DrawerHeader,
-  DrawerBody
+  DrawerBody,
+  useDisclosure
 } from '@chakra-ui/react';
 import { 
   FiHome, 
@@ -61,6 +62,7 @@ const Sidebar = ({ isOpen, onClose, width = "240px" }) => {
   const location = useLocation();
   const borderColor = useColorModeValue('gray.200', 'gray.700');
   const bgColor = useColorModeValue('white', 'gray.800');
+  const { isOpen: drawerIsOpen, onOpen, onClose: onDrawerClose } = useDisclosure();
 
   // Function to check if a nav item is active
   const isActive = (path) => {
@@ -70,33 +72,9 @@ const Sidebar = ({ isOpen, onClose, width = "240px" }) => {
     return path !== '/' && location.pathname.startsWith(path);
   };
 
-  // For mobile: use a Drawer component
-  const MobileDrawer = () => (
-    <Drawer
-      autoFocus={false}
-      isOpen={isOpen}
-      placement="left"
-      onClose={onClose}
-      returnFocusOnClose={false}
-      onOverlayClick={onClose}
-      size="full"
-    >
-      <DrawerOverlay />
-      <DrawerContent>
-        <DrawerCloseButton />
-        <DrawerHeader borderBottomWidth="1px">
-          NexusFlow.ai
-        </DrawerHeader>
-        <DrawerBody p={0}>
-          <SidebarContent isMobile={true} />
-        </DrawerBody>
-      </DrawerContent>
-    </Drawer>
-  );
-
-  // Sidebar contents
-  const SidebarContent = ({ isMobile = false }) => (
-    <VStack spacing={1} align="stretch">
+  // Sidebar content (shared between desktop and mobile)
+  const SidebarContent = ({ onClickLink }) => (
+    <VStack spacing={1} align="stretch" width="100%">
       <Flex h="20" alignItems="center" justifyContent="center">
         <Text
           fontSize="2xl"
@@ -111,7 +89,7 @@ const Sidebar = ({ isOpen, onClose, width = "240px" }) => {
         icon={FiHome} 
         to="/" 
         active={isActive('/')}
-        onClick={isMobile ? onClose : undefined}
+        onClick={onClickLink}
       >
         Dashboard
       </NavItem>
@@ -120,7 +98,7 @@ const Sidebar = ({ isOpen, onClose, width = "240px" }) => {
         icon={FiActivity} 
         to="/flows" 
         active={isActive('/flows')}
-        onClick={isMobile ? onClose : undefined}
+        onClick={onClickLink}
       >
         Flow Designer
       </NavItem>
@@ -129,7 +107,7 @@ const Sidebar = ({ isOpen, onClose, width = "240px" }) => {
         icon={FiPlay} 
         to="/executions" 
         active={isActive('/executions')}
-        onClick={isMobile ? onClose : undefined}
+        onClick={onClickLink}
       >
         Flow Testing
       </NavItem>
@@ -138,7 +116,7 @@ const Sidebar = ({ isOpen, onClose, width = "240px" }) => {
         icon={FiTool} 
         to="/tools" 
         active={isActive('/tools')}
-        onClick={isMobile ? onClose : undefined}
+        onClick={onClickLink}
       >
         Tools
       </NavItem>
@@ -149,7 +127,7 @@ const Sidebar = ({ isOpen, onClose, width = "240px" }) => {
         icon={FiServer} 
         to="/deployments" 
         active={isActive('/deployments')}
-        onClick={isMobile ? onClose : undefined}
+        onClick={onClickLink}
       >
         Deployments
       </NavItem>
@@ -160,37 +138,55 @@ const Sidebar = ({ isOpen, onClose, width = "240px" }) => {
         icon={FiSettings} 
         to="/settings" 
         active={isActive('/settings')}
-        onClick={isMobile ? onClose : undefined}
+        onClick={onClickLink}
       >
         Settings
       </NavItem>
     </VStack>
   );
 
+  // Mobile drawer view
+  const MobileDrawer = () => (
+    <Drawer
+      isOpen={!isOpen ? false : drawerIsOpen}
+      placement="left"
+      onClose={onDrawerClose}
+      returnFocusOnClose={false}
+    >
+      <DrawerOverlay />
+      <DrawerContent>
+        <DrawerCloseButton />
+        <DrawerHeader>Navigation</DrawerHeader>
+        <DrawerBody padding={0}>
+          <SidebarContent onClickLink={onDrawerClose} />
+        </DrawerBody>
+      </DrawerContent>
+    </Drawer>
+  );
+
   return (
     <>
-      {/* Desktop sidebar - fixed position */}
+      {/* Desktop sidebar - Using position absolute/fixed causes z-index issues */}
+      {/* Instead, we'll use a normal div that's part of the flex layout */}
       <Box
-        as="nav"
-        pos="fixed"
-        top="0"
-        left="0"
-        zIndex="sticky"
-        h="full"
-        pb="10"
-        overflowX="hidden"
-        overflowY="auto"
+        width={width}
+        height="100vh"
+        overflow="hidden"
         bg={bgColor}
         borderRight="1px"
         borderRightColor={borderColor}
-        width={width}
-        display={{ base: 'none', md: 'block' }}
-        transition="width 0.3s ease-in-out"
+        position="fixed"
+        left={0}
+        top={0}
+        zIndex={10}
+        display={{ base: 'none', md: isOpen ? 'block' : 'none' }}
       >
-        <SidebarContent />
+        <Box overflowY="auto" height="100%">
+          <SidebarContent />
+        </Box>
       </Box>
 
-      {/* Mobile sidebar - drawer */}
+      {/* Mobile drawer */}
       <MobileDrawer />
     </>
   );
