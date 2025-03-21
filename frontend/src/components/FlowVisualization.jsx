@@ -150,10 +150,6 @@ const edgeStyles = {
   }
 };
 
-const cardBg = useColorModeValue('white', 'gray.700');
-const borderColor = useColorModeValue('gray.200', 'gray.600');
-const textColor = useColorModeValue('gray.800', 'white');
-
 const FlowVisualization = ({ executionTrace, flowData, framework = 'auto', onDownload }) => {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
@@ -166,6 +162,7 @@ const FlowVisualization = ({ executionTrace, flowData, framework = 'auto', onDow
   
   const cardBg = useColorModeValue('white', 'gray.700');
   const borderColor = useColorModeValue('gray.200', 'gray.600');
+  const textColor = useColorModeValue('gray.800', 'white');  
 
   useEffect(() => {
     if (executionTrace && executionTrace.length > 0) {
