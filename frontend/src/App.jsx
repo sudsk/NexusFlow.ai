@@ -101,21 +101,29 @@ function AppLayout({ apiConnected, sidebarOpen, onToggleSidebar }) {
   const SIDEBAR_WIDTH = "240px";
   
   return (
-    <div className="app-container" style={{ display: 'flex', height: '100vh' }}>
-      {/* Sidebar component with fixed width */}
-      <Sidebar isOpen={sidebarOpen} width={SIDEBAR_WIDTH} />
+    <div style={{ display: 'flex', width: '100%', height: '100vh', overflow: 'hidden' }}>
+      {/* Sidebar component */}
+      <Sidebar 
+        isOpen={sidebarOpen} 
+        width={SIDEBAR_WIDTH} 
+        onClose={onToggleSidebar}
+      />
       
-      {/* Main content with left margin to prevent sidebar overlap */}
+      {/* Content area - this will flow naturally beside the sidebar */}
       <div 
-        className="content-container" 
         style={{ 
-          flex: 1, 
+          flex: 1,
+          width: `calc(100% - ${sidebarOpen ? SIDEBAR_WIDTH : "0px"})`, 
+          marginLeft: sidebarOpen ? SIDEBAR_WIDTH : "0px",
+          height: '100vh',
           overflow: 'auto',
-          marginLeft: sidebarOpen ? SIDEBAR_WIDTH : "0px", // Add margin when sidebar is open
-          transition: "margin-left 0.3s ease-in-out" // Smooth transition
+          transition: "width 0.3s, margin-left 0.3s" 
         }}
       >
-        <Header onToggleSidebar={onToggleSidebar} />
+        <Header 
+          onToggleSidebar={onToggleSidebar} 
+          isSidebarOpen={sidebarOpen} 
+        />
         <div style={{ padding: '20px' }}>
           <Routes>
             <Route path="/" element={<Dashboard />} />
