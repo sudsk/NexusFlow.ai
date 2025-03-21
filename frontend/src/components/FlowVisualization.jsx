@@ -19,7 +19,7 @@ import {
   MenuList,
   MenuItem,
   Divider,
-  Header,
+  Heading,
 } from '@chakra-ui/react';
 import ReactFlow, {
   Background,
