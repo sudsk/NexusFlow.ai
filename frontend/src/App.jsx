@@ -60,9 +60,14 @@ const PrivateRoute = ({ children }) => {
 
 function App() {
   const [apiConnected, setApiConnected] = useState(null);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   
   const handleApiConnectionChange = (isConnected) => {
     setApiConnected(isConnected);
+  };
+  
+  const handleToggleSidebar = () => {
+    setSidebarOpen(!sidebarOpen);
   };
   
   return (
@@ -77,7 +82,11 @@ function App() {
           {/* Private routes */}
           <Route path="/*" element={
             <PrivateRoute>
-              <AppLayout apiConnected={apiConnected} />
+              <AppLayout 
+                apiConnected={apiConnected} 
+                sidebarOpen={sidebarOpen}
+                onToggleSidebar={handleToggleSidebar}
+              />
             </PrivateRoute>
           } />
         </Routes>
@@ -87,12 +96,26 @@ function App() {
 }
 
 // Main application layout
-function AppLayout({ apiConnected }) {
+function AppLayout({ apiConnected, sidebarOpen, onToggleSidebar }) {
+  // Define the sidebar width in pixels
+  const SIDEBAR_WIDTH = "240px";
+  
   return (
     <div className="app-container" style={{ display: 'flex', height: '100vh' }}>
-      <Sidebar />
-      <div className="content-container" style={{ flex: 1, overflow: 'auto' }}>
-        <Header />
+      {/* Sidebar component with fixed width */}
+      <Sidebar isOpen={sidebarOpen} width={SIDEBAR_WIDTH} />
+      
+      {/* Main content with left margin to prevent sidebar overlap */}
+      <div 
+        className="content-container" 
+        style={{ 
+          flex: 1, 
+          overflow: 'auto',
+          marginLeft: sidebarOpen ? SIDEBAR_WIDTH : "0px", // Add margin when sidebar is open
+          transition: "margin-left 0.3s ease-in-out" // Smooth transition
+        }}
+      >
+        <Header onToggleSidebar={onToggleSidebar} />
         <div style={{ padding: '20px' }}>
           <Routes>
             <Route path="/" element={<Dashboard />} />
