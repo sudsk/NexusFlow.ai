@@ -13,9 +13,7 @@ import Login from './pages/Login';
 
 // Import pages
 import FlowList from './pages/FlowList';
-import AgentList from './pages/AgentList';
 import ToolManagement from './pages/ToolManagement';
-import CapabilityList from './pages/CapabilityList';
 import DeploymentList from './pages/DeploymentList';
 import Settings from './pages/Settings';
 import apiService from './services/api';
@@ -101,9 +99,7 @@ function AppLayout({ apiConnected }) {
             <Route path="/flows" element={<FlowList />} />
             <Route path="/flows/new" element={<FlowEditor />} />
             <Route path="/flows/:flowId" element={<FlowEditor />} />
-            <Route path="/agents" element={<AgentList />} />
             <Route path="/tools" element={<ToolManagement />} />
-            <Route path="/capabilities" element={<CapabilityList />} />
             <Route path="/deployments" element={<DeploymentList />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="/executions" element={<ExecutionsPage />} />
