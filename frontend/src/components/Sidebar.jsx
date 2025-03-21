@@ -1,117 +1,180 @@
-// frontend/src/App.jsx
-import React, { useState, useEffect } from 'react';
-import { ChakraProvider, extendTheme } from '@chakra-ui/react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import Dashboard from './pages/Dashboard';
-import FlowEditor from './pages/FlowEditor';
-import ExecutionViewer from './pages/ExecutionViewer';
-import ExecutionsPage from './pages/ExecutionsPage';
-import Header from './components/Header';
-import Sidebar from './components/Sidebar';
-import ApiConnectionChecker from './components/ApiConnectionChecker';
-import Login from './pages/Login';
+// frontend/src/components/Sidebar.jsx
+import React from 'react';
+import {
+  Box,
+  VStack,
+  Flex,
+  Text,
+  Icon,
+  Divider,
+  useColorModeValue,
+  Drawer,
+  DrawerOverlay,
+  DrawerContent,
+  DrawerCloseButton,
+  DrawerHeader,
+  DrawerBody,
+  useDisclosure
+} from '@chakra-ui/react';
+import { 
+  FiHome, 
+  FiActivity, 
+  FiServer, 
+  FiTool, 
+  FiSettings,
+  FiPlay
+} from 'react-icons/fi';
+import { Link, useLocation } from 'react-router-dom';
 
-// Import pages
-import FlowList from './pages/FlowList';
-import ToolManagement from './pages/ToolManagement';
-import DeploymentList from './pages/DeploymentList';
-import Settings from './pages/Settings';
-import apiService from './services/api';
+// NavItem component for sidebar links
+const NavItem = ({ icon, children, to, active }) => {
+  const activeBg = useColorModeValue('brand.50', 'brand.900');
+  const hoverBg = useColorModeValue('gray.100', 'gray.700');
+  const activeColor = useColorModeValue('brand.600', 'brand.200');
+  const color = useColorModeValue('gray.700', 'gray.200');
 
-// Define theme
-const theme = extendTheme({
-  colors: {
-    brand: {
-      50: '#e0f2ff',
-      100: '#b9deff',
-      200: '#90caff',
-      300: '#64b5ff',
-      400: '#3aa0ff',
-      500: '#1a91ff', // Primary brand color
-      600: '#0077e6',
-      700: '#005bb3',
-      800: '#003f80',
-      900: '#00254d',
-    },
-  },
-  fonts: {
-    heading: '"Inter", sans-serif',
-    body: '"Inter", sans-serif',
-  },
-  styles: {
-    global: {
-      body: {
-        bg: 'gray.50',
-      },
-    },
-  },
-});
-
-// Private route component to handle authentication
-const PrivateRoute = ({ children }) => {
-  // If using mock API or authenticated, render children
-  if (apiService.mock.isEnabled() || apiService.auth.isAuthenticated()) {
-    return children;
-  }
-  
-  // Otherwise, redirect to login
-  return <Navigate to="/login" />;
+  return (
+    <Link to={to} style={{ width: '100%' }}>
+      <Flex
+        align="center"
+        p="3"
+        mx="2"
+        borderRadius="md"
+        role="group"
+        cursor="pointer"
+        _hover={{ bg: hoverBg }}
+        bg={active ? activeBg : 'transparent'}
+        color={active ? activeColor : color}
+        fontWeight={active ? 'bold' : 'normal'}
+      >
+        <Icon
+          mr="3"
+          fontSize="16"
+          as={icon}
+        />
+        {children}
+      </Flex>
+    </Link>
+  );
 };
 
-function App() {
-  const [apiConnected, setApiConnected] = useState(null);
-  
-  const handleApiConnectionChange = (isConnected) => {
-    setApiConnected(isConnected);
+const Sidebar = () => {
+  const { isOpen, onOpen, onClose } = useDisclosure();
+  const location = useLocation();
+  const borderColor = useColorModeValue('gray.200', 'gray.700');
+  const bgColor = useColorModeValue('white', 'gray.800');
+
+  // Function to check if a nav item is active
+  const isActive = (path) => {
+    if (path === '/' && location.pathname === '/') {
+      return true;
+    }
+    return path !== '/' && location.pathname.startsWith(path);
   };
-  
-  return (
-    <ChakraProvider theme={theme}>
-      <Router>
-        <ApiConnectionChecker onConnectionStatusChange={handleApiConnectionChange} />
-        
-        <Routes>
-          {/* Public routes */}
-          <Route path="/login" element={<Login />} />
-          
-          {/* Private routes */}
-          <Route path="/*" element={
-            <PrivateRoute>
-              <AppLayout apiConnected={apiConnected} />
-            </PrivateRoute>
-          } />
-        </Routes>
-      </Router>
-    </ChakraProvider>
-  );
-}
 
-// Main application layout
-function AppLayout({ apiConnected }) {
-  return (
-    <div className="app-container" style={{ display: 'flex', height: '100vh' }}>
-      <Sidebar />
-      <div className="content-container" style={{ flex: 1, overflow: 'auto' }}>
-        <Header />
-        <div style={{ padding: '20px' }}>
-          <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/flows" element={<FlowList />} />
-            <Route path="/flows/new" element={<FlowEditor />} />
-            <Route path="/flows/:flowId" element={<FlowEditor />} />
-            <Route path="/tools" element={<ToolManagement />} />
-            <Route path="/deployments" element={<DeploymentList />} />
-            <Route path="/settings" element={<Settings />} />
-            <Route path="/executions" element={<ExecutionsPage />} />
-            <Route path="/executions/:executionId" element={<ExecutionViewer />} />
-            
-            {/* Fallback route */}
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </div>
-      </div>
-    </div>
+  // Sidebar contents
+  const SidebarContent = () => (
+    <Box
+      as="nav"
+      pos="fixed"
+      top="0"
+      left="0"
+      zIndex="sticky"
+      h="full"
+      pb="10"
+      overflowX="hidden"
+      overflowY="auto"
+      bg={bgColor}
+      borderRight="1px"
+      borderRightColor={borderColor}
+      w="60"
+      display={{ base: 'none', md: 'block' }}
+    >
+      <Flex h="20" alignItems="center" justifyContent="center">
+        <Text
+          fontSize="2xl"
+          fontWeight="bold"
+          color="brand.500"
+        >
+          NexusFlow.ai
+        </Text>
+      </Flex>
+      <VStack spacing={1} align="stretch">
+        <NavItem icon={FiHome} to="/" active={isActive('/')}>
+          Dashboard
+        </NavItem>
+        <NavItem icon={FiActivity} to="/flows" active={isActive('/flows')}>
+          Flow Designer
+        </NavItem>
+        <NavItem icon={FiPlay} to="/executions" active={isActive('/executions')}>
+          Flow Testing
+        </NavItem>
+        <NavItem icon={FiTool} to="/tools" active={isActive('/tools')}>
+          Tools
+        </NavItem>
+        <Divider my={2} />
+        <NavItem icon={FiServer} to="/deployments" active={isActive('/deployments')}>
+          Deployments
+        </NavItem>
+        <Divider my={2} />
+        <NavItem icon={FiSettings} to="/settings" active={isActive('/settings')}>
+          Settings
+        </NavItem>
+      </VStack>
+    </Box>
   );
-}
 
-export default App;
+  // Mobile drawer for sidebar
+  const MobileDrawer = () => (
+    <Drawer
+      autoFocus={false}
+      isOpen={isOpen}
+      placement="left"
+      onClose={onClose}
+      returnFocusOnClose={false}
+      onOverlayClick={onClose}
+      size="full"
+    >
+      <DrawerOverlay />
+      <DrawerContent>
+        <DrawerCloseButton />
+        <DrawerHeader borderBottomWidth="1px">
+          NexusFlow.ai
+        </DrawerHeader>
+        <DrawerBody p={0}>
+          <VStack spacing={1} align="stretch">
+            <NavItem icon={FiHome} to="/" active={isActive('/')} onClick={onClose}>
+              Dashboard
+            </NavItem>
+            <NavItem icon={FiActivity} to="/flows" active={isActive('/flows')} onClick={onClose}>
+              Flow Designer
+            </NavItem>
+            <NavItem icon={FiPlay} to="/executions" active={isActive('/executions')} onClick={onClose}>
+              Flow Testing
+            </NavItem>
+            <NavItem icon={FiTool} to="/tools" active={isActive('/tools')} onClick={onClose}>
+              Tools
+            </NavItem>
+            <Divider my={2} />
+            <NavItem icon={FiServer} to="/deployments" active={isActive('/deployments')} onClick={onClose}>
+              Deployments
+            </NavItem>
+            <Divider my={2} />
+            <NavItem icon={FiSettings} to="/settings" active={isActive('/settings')} onClick={onClose}>
+              Settings
+            </NavItem>
+          </VStack>
+        </DrawerBody>
+      </DrawerContent>
+    </Drawer>
+  );
+
+  return (
+    <>
+      <SidebarContent />
+      <MobileDrawer />
+    </>
+  );
+};
+
+export default Sidebar;
