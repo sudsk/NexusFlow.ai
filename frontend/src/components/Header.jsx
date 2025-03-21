@@ -13,9 +13,19 @@ import {
   MenuList,
   MenuItem,
   useColorMode,
-  useColorModeValue
+  useColorModeValue,
+  Text
 } from '@chakra-ui/react';
-import { FiMenu, FiMoon, FiSun, FiUser, FiLogOut, FiSettings, FiChevronLeft, FiChevronRight } from 'react-icons/fi';
+import { 
+  FiMenu, 
+  FiMoon, 
+  FiSun, 
+  FiUser, 
+  FiLogOut, 
+  FiSettings, 
+  FiChevronLeft, 
+  FiChevronRight 
+} from 'react-icons/fi';
 import { useNavigate } from 'react-router-dom';
 import apiService from '../services/api';
 
@@ -44,19 +54,20 @@ const Header = ({ onToggleSidebar, isSidebarOpen }) => {
       px={4}
       position="sticky"
       top="0"
-      zIndex="10"
+      zIndex="15"
+      width="100%"
     >
       <Flex alignItems="center">
-        {/* Sidebar toggle button - visible on all screen sizes */}
+        {/* Toggle sidebar button */}
         <IconButton
           icon={isSidebarOpen ? <FiChevronLeft /> : <FiChevronRight />}
           variant="ghost"
           onClick={onToggleSidebar}
-          aria-label={isSidebarOpen ? "Close sidebar" : "Open sidebar"}
+          aria-label={isSidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
           mr={2}
         />
         
-        <Heading size="md" color="brand.500" ml={2}>
+        <Heading size="md" color="brand.500">
           NexusFlow.ai
         </Heading>
         
