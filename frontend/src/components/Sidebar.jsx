@@ -13,8 +13,7 @@ import {
   DrawerContent,
   DrawerCloseButton,
   DrawerHeader,
-  DrawerBody,
-  useDisclosure
+  DrawerBody
 } from '@chakra-ui/react';
 import { 
   FiHome, 
@@ -27,14 +26,14 @@ import {
 import { Link, useLocation } from 'react-router-dom';
 
 // NavItem component for sidebar links
-const NavItem = ({ icon, children, to, active }) => {
+const NavItem = ({ icon, children, to, active, onClick }) => {
   const activeBg = useColorModeValue('brand.50', 'brand.900');
   const hoverBg = useColorModeValue('gray.100', 'gray.700');
   const activeColor = useColorModeValue('brand.600', 'brand.200');
   const color = useColorModeValue('gray.700', 'gray.200');
 
   return (
-    <Link to={to} style={{ width: '100%' }}>
+    <Link to={to} style={{ width: '100%' }} onClick={onClick}>
       <Flex
         align="center"
         p="3"
@@ -58,8 +57,7 @@ const NavItem = ({ icon, children, to, active }) => {
   );
 };
 
-const Sidebar = () => {
-  const { isOpen, onOpen, onClose } = useDisclosure();
+const Sidebar = ({ isOpen, onClose, width = "240px" }) => {
   const location = useLocation();
   const borderColor = useColorModeValue('gray.200', 'gray.700');
   const bgColor = useColorModeValue('white', 'gray.800');
@@ -72,59 +70,7 @@ const Sidebar = () => {
     return path !== '/' && location.pathname.startsWith(path);
   };
 
-  // Sidebar contents
-  const SidebarContent = () => (
-    <Box
-      as="nav"
-      pos="fixed"
-      top="0"
-      left="0"
-      zIndex="sticky"
-      h="full"
-      pb="10"
-      overflowX="hidden"
-      overflowY="auto"
-      bg={bgColor}
-      borderRight="1px"
-      borderRightColor={borderColor}
-      w="60"
-      display={{ base: 'none', md: 'block' }}
-    >
-      <Flex h="20" alignItems="center" justifyContent="center">
-        <Text
-          fontSize="2xl"
-          fontWeight="bold"
-          color="brand.500"
-        >
-          NexusFlow.ai
-        </Text>
-      </Flex>
-      <VStack spacing={1} align="stretch">
-        <NavItem icon={FiHome} to="/" active={isActive('/')}>
-          Dashboard
-        </NavItem>
-        <NavItem icon={FiActivity} to="/flows" active={isActive('/flows')}>
-          Flow Designer
-        </NavItem>
-        <NavItem icon={FiPlay} to="/executions" active={isActive('/executions')}>
-          Flow Testing
-        </NavItem>
-        <NavItem icon={FiTool} to="/tools" active={isActive('/tools')}>
-          Tools
-        </NavItem>
-        <Divider my={2} />
-        <NavItem icon={FiServer} to="/deployments" active={isActive('/deployments')}>
-          Deployments
-        </NavItem>
-        <Divider my={2} />
-        <NavItem icon={FiSettings} to="/settings" active={isActive('/settings')}>
-          Settings
-        </NavItem>
-      </VStack>
-    </Box>
-  );
-
-  // Mobile drawer for sidebar
+  // For mobile: use a Drawer component
   const MobileDrawer = () => (
     <Drawer
       autoFocus={false}
@@ -142,36 +88,109 @@ const Sidebar = () => {
           NexusFlow.ai
         </DrawerHeader>
         <DrawerBody p={0}>
-          <VStack spacing={1} align="stretch">
-            <NavItem icon={FiHome} to="/" active={isActive('/')} onClick={onClose}>
-              Dashboard
-            </NavItem>
-            <NavItem icon={FiActivity} to="/flows" active={isActive('/flows')} onClick={onClose}>
-              Flow Designer
-            </NavItem>
-            <NavItem icon={FiPlay} to="/executions" active={isActive('/executions')} onClick={onClose}>
-              Flow Testing
-            </NavItem>
-            <NavItem icon={FiTool} to="/tools" active={isActive('/tools')} onClick={onClose}>
-              Tools
-            </NavItem>
-            <Divider my={2} />
-            <NavItem icon={FiServer} to="/deployments" active={isActive('/deployments')} onClick={onClose}>
-              Deployments
-            </NavItem>
-            <Divider my={2} />
-            <NavItem icon={FiSettings} to="/settings" active={isActive('/settings')} onClick={onClose}>
-              Settings
-            </NavItem>
-          </VStack>
+          <SidebarContent isMobile={true} />
         </DrawerBody>
       </DrawerContent>
     </Drawer>
   );
 
+  // Sidebar contents
+  const SidebarContent = ({ isMobile = false }) => (
+    <VStack spacing={1} align="stretch">
+      <Flex h="20" alignItems="center" justifyContent="center">
+        <Text
+          fontSize="2xl"
+          fontWeight="bold"
+          color="brand.500"
+        >
+          NexusFlow.ai
+        </Text>
+      </Flex>
+      
+      <NavItem 
+        icon={FiHome} 
+        to="/" 
+        active={isActive('/')}
+        onClick={isMobile ? onClose : undefined}
+      >
+        Dashboard
+      </NavItem>
+      
+      <NavItem 
+        icon={FiActivity} 
+        to="/flows" 
+        active={isActive('/flows')}
+        onClick={isMobile ? onClose : undefined}
+      >
+        Flow Designer
+      </NavItem>
+      
+      <NavItem 
+        icon={FiPlay} 
+        to="/executions" 
+        active={isActive('/executions')}
+        onClick={isMobile ? onClose : undefined}
+      >
+        Flow Testing
+      </NavItem>
+      
+      <NavItem 
+        icon={FiTool} 
+        to="/tools" 
+        active={isActive('/tools')}
+        onClick={isMobile ? onClose : undefined}
+      >
+        Tools
+      </NavItem>
+      
+      <Divider my={2} />
+      
+      <NavItem 
+        icon={FiServer} 
+        to="/deployments" 
+        active={isActive('/deployments')}
+        onClick={isMobile ? onClose : undefined}
+      >
+        Deployments
+      </NavItem>
+      
+      <Divider my={2} />
+      
+      <NavItem 
+        icon={FiSettings} 
+        to="/settings" 
+        active={isActive('/settings')}
+        onClick={isMobile ? onClose : undefined}
+      >
+        Settings
+      </NavItem>
+    </VStack>
+  );
+
   return (
     <>
-      <SidebarContent />
+      {/* Desktop sidebar - fixed position */}
+      <Box
+        as="nav"
+        pos="fixed"
+        top="0"
+        left="0"
+        zIndex="sticky"
+        h="full"
+        pb="10"
+        overflowX="hidden"
+        overflowY="auto"
+        bg={bgColor}
+        borderRight="1px"
+        borderRightColor={borderColor}
+        width={width}
+        display={{ base: 'none', md: 'block' }}
+        transition="width 0.3s ease-in-out"
+      >
+        <SidebarContent />
+      </Box>
+
+      {/* Mobile sidebar - drawer */}
       <MobileDrawer />
     </>
   );
