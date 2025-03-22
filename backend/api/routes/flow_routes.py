@@ -58,7 +58,10 @@ async def list_flows(
         )
         
         # Count total flows (with the same filters but no pagination)
-        total_flows = await flow_service.count_flows(name=name, framework=framework)
+        total_flows = await flow_service.count_flows(
+            name=name,
+            framework=framework
+        )        
         
         return FlowListResponse(
             items=flows,
