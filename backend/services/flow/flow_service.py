@@ -130,6 +130,24 @@ class FlowService:
             List of flows
         """
         return self.flow_repository.get_all(skip=skip, limit=limit, name=name, framework=framework)
+
+    async def count_flows(
+        self, 
+        name: Optional[str] = None,
+        framework: Optional[str] = None
+    ) -> int:
+        """
+        Count flows with optional filtering
+        
+        Args:
+            name: Optional filter by name
+            framework: Optional filter by framework
+            
+        Returns:
+            Total number of flows matching the filter
+        """
+        return self.flow_repository.count_flows(name=name, framework=framework)
+    
     
     async def get_frameworks(self) -> Dict[str, Dict[str, bool]]:
         """
