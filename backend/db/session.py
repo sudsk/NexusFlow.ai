@@ -15,6 +15,9 @@ DB_NAME = os.environ.get("DB_NAME", "nexusflow")
 DB_USER = os.environ.get("DB_USER", "nexusflow-user")
 DB_PASSWORD = os.environ.get("DB_PASSWORD", "")
 
+# Add to the beginning of backend/db/session.py
+print(f"Database connection: {DB_HOST}:{DB_PORT}/{DB_NAME} as {DB_USER}")
+
 # Create connection string
 DATABASE_URL = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 
