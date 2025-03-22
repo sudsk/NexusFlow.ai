@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from typing import List, Dict, Any, Optional
 from sqlalchemy.orm import Session
 
-from backend.db.session import get_db
+from ...db.session import get_db
 from ...core.entities.flow import Flow
 from ...services.flow.flow_service import FlowService
 from ...adapters.registry import get_adapter_registry
