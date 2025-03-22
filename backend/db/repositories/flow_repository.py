@@ -102,3 +102,31 @@ class FlowRepository:
             created_at=model.created_at,
             updated_at=model.updated_at
         )
+
+    def count_flows(
+        self, 
+        name: Optional[str] = None,
+        framework: Optional[str] = None
+    ) -> int:
+        """
+        Count flows with optional filtering
+        
+        Args:
+            name: Optional name filter
+            framework: Optional framework filter
+            
+        Returns:
+            Total number of flows matching the filter
+        """
+        query = self.db.query(FlowModel)
+        
+        if name:
+            query = query.filter(or_(
+                FlowModel.name.ilike(f"%{name}%"),
+                FlowModel.description.ilike(f"%{name}%")
+            ))
+        
+        if framework:
+            query = query.filter(FlowModel.framework == framework)
+        
+        return query.count()
