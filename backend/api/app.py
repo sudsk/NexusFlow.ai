@@ -12,7 +12,6 @@ from .routes import flow_routes, execution_routes, tool_routes, framework_routes
 from .middleware.auth_middleware import AuthMiddleware
 
 # Add to the beginning of backend/db/session.py
-print(os.environ.get("DB_HOST", "DB_HOST not set"))
 
 # Configure logging
 logging.basicConfig(
@@ -36,13 +35,15 @@ app = FastAPI(
 )
 
 # Configure CORS
-print(os.environ.get("ALLOWED_ORIGINS", "CORS not set"))
+origins = os.environ.get("ALLOWED_ORIGINS", "*").split(",")
+print(f"CORS Allowed Origins: {origins}")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=os.environ.get("ALLOWED_ORIGINS", "*").split(","),
+    allow_origins=[origin.strip() for origin in origins],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"]  # Expose all headers to the client
 )
 
 # Error handling middleware
