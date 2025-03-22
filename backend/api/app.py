@@ -11,6 +11,9 @@ import os
 from .routes import flow_routes, execution_routes, tool_routes, framework_routes, deployment_routes
 from .middleware.auth_middleware import AuthMiddleware
 
+# Add to the beginning of backend/db/session.py
+print(os.environ.get("DB_HOST", "DB_HOST not set"))
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -32,11 +35,8 @@ app = FastAPI(
     redoc_url="/redoc"
 )
 
-# Add to the beginning of backend/db/session.py
-print(f"Database connection: {DB_HOST}:{DB_PORT}/{DB_NAME} as {DB_USER}")
-
 # Configure CORS
-print(os.environ.get("ALLOWED_ORIGINS", "*"))
+print(os.environ.get("ALLOWED_ORIGINS", "CORS not set"))
 app.add_middleware(
     CORSMiddleware,
     allow_origins=os.environ.get("ALLOWED_ORIGINS", "*").split(","),
