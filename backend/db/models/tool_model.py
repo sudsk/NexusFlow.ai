@@ -18,4 +18,4 @@ class ToolModel(Base):
     requires_authentication = Column(Boolean, default=False)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
-    metadata = Column(JSON)
+    metadata_ = Column('metadata',JSON)
