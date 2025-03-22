@@ -1,4 +1,4 @@
-# backend/api/midddleware/auth_midleware.py
+# backend/api/middleware/auth_middleware.py
 import os
 from fastapi import Request, HTTPException, Depends
 from fastapi.security import APIKeyHeader
