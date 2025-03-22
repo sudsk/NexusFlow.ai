@@ -31,7 +31,8 @@ app = FastAPI(
     description="API for the NexusFlow.ai agent orchestration platform",
     version="0.1.0",
     docs_url="/docs",
-    redoc_url="/redoc"
+    redoc_url="/redoc",
+    redirect_slashes=False  # Add this line
 )
 
 # Configure CORS
