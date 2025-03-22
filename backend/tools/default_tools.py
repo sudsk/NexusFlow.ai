@@ -46,231 +46,7 @@ def web_search(params: Dict[str, Any], context: Optional[Dict[str, Any]] = None)
                 "title": f"Result 1 for {query}",
                 "link": "https://example.com/1",
                 "snippet": f"This is a mock search result for {query}. It contains some relevant information about the topic."
-            }
-
-def document_retrieval(params: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-    """
-    Retrieve documents from a knowledge base
-    
-    Args:
-        params:
-            query (str): Search query for documents
-            collection (str, optional): Collection to search
-            limit (int, optional): Maximum number of documents to return
-        context: Execution context
-        
-    Returns:
-        Dictionary with retrieved documents
-    """
-    query = params.get('query')
-    if not query:
-        raise ValueError("Query parameter is required")
-        
-    collection = params.get('collection', 'default')
-    limit = params.get('limit', 5)
-    
-    # Mock implementation for development/testing
-    use_mock = os.environ.get('USE_MOCK_TOOLS', 'false').lower() == 'true'
-    
-    if use_mock:
-        logger.info(f"[MOCK] Document retrieval - Query: {query}, Collection: {collection}")
-        time.sleep(1)  # Simulate API delay
-        
-        mock_docs = [
-            {
-                "id": "doc-1",
-                "title": f"Document about {query}",
-                "content": f"This document contains information about {query}. It discusses key concepts and provides examples.",
-                "metadata": {
-                    "source": "knowledge_base",
-                    "created_at": "2024-01-15T10:30:00Z",
-                    "collection": collection
-                }
             },
-            {
-                "id": "doc-2",
-                "title": f"Understanding {query}",
-                "content": f"A comprehensive guide to understanding {query} and related concepts. This document provides in-depth explanations and case studies.",
-                "metadata": {
-                    "source": "knowledge_base",
-                    "created_at": "2024-02-20T14:45:00Z",
-                    "collection": collection
-                }
-            },
-            {
-                "id": "doc-3",
-                "title": f"Best practices for {query}",
-                "content": f"Learn about best practices and recommended approaches for working with {query}. This guide includes tips, tricks, and common pitfalls to avoid.",
-                "metadata": {
-                    "source": "knowledge_base",
-                    "created_at": "2024-03-10T09:15:00Z",
-                    "collection": collection
-                }
-            }
-        ]
-        
-        return {
-            "query": query,
-            "collection": collection,
-            "documents": mock_docs[:limit],
-            "total": len(mock_docs)
-        }
-    
-    else:
-        # In a real implementation, connect to a vector database or knowledge base
-        # This is a placeholder for the actual implementation
-        logger.warning("Real document retrieval not implemented, using mock data")
-        return document_retrieval(params, context)
-
-def image_generation(params: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-    """
-    Generate an image based on a text prompt
-    
-    Args:
-        params:
-            prompt (str): Text description of the desired image
-            style (str, optional): Style of the image
-            size (str, optional): Size of the image (e.g., "512x512")
-        context: Execution context
-        
-    Returns:
-        Dictionary with image URL or data
-    """
-    prompt = params.get('prompt')
-    if not prompt:
-        raise ValueError("Prompt parameter is required")
-        
-    style = params.get('style', 'natural')
-    size = params.get('size', '512x512')
-    
-    # Mock implementation for development/testing
-    use_mock = os.environ.get('USE_MOCK_TOOLS', 'false').lower() == 'true'
-    image_api_key = os.environ.get('IMAGE_API_KEY')
-    
-    if use_mock or not image_api_key:
-        logger.info(f"[MOCK] Image generation - Prompt: {prompt}, Style: {style}")
-        time.sleep(2)  # Simulate API delay
-        
-        # Return a placeholder image URL
-        return {
-            "prompt": prompt,
-            "style": style,
-            "size": size,
-            "image_url": f"https://placehold.co/{size}?text={prompt[:20]}",
-            "mock": True
-        }
-    
-    else:
-        # Real implementation using image generation API
-        try:
-            # Example using a generic image API (replace with your preferred provider)
-            api_url = "https://api.image-provider.com/generate"
-            headers = {
-                "Authorization": f"Bearer {image_api_key}",
-                "Content-Type": "application/json"
-            }
-            payload = {
-                "prompt": prompt,
-                "style": style,
-                "size": size
-            }
-            
-            response = requests.post(api_url, headers=headers, json=payload)
-            response.raise_for_status()
-            
-            # Parse response (adjust based on actual API response format)
-            api_response = response.json()
-            
-            return {
-                "prompt": prompt,
-                "style": style,
-                "size": size,
-                "image_url": api_response.get("url"),
-                "image_id": api_response.get("id")
-            }
-            
-        except Exception as e:
-            logger.exception(f"Error in image generation: {str(e)}")
-            raise ValueError(f"Image generation failed: {str(e)}")
-            
-def translation(params: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-    """
-    Translate text from one language to another
-    
-    Args:
-        params:
-            text (str): Text to translate
-            source_language (str, optional): Source language code
-            target_language (str): Target language code
-        context: Execution context
-        
-    Returns:
-        Dictionary with translated text
-    """
-    text = params.get('text')
-    if not text:
-        raise ValueError("Text parameter is required")
-        
-    target_language = params.get('target_language')
-    if not target_language:
-        raise ValueError("Target language parameter is required")
-        
-    source_language = params.get('source_language', 'auto')
-    
-    # Mock implementation for development/testing
-    use_mock = os.environ.get('USE_MOCK_TOOLS', 'false').lower() == 'true'
-    
-    if use_mock:
-        logger.info(f"[MOCK] Translation - Text: {text[:50]}..., Source: {source_language}, Target: {target_language}")
-        time.sleep(1)  # Simulate API delay
-        
-        # Simple mock translation (just adds language code as prefix)
-        translated_text = f"[{target_language}] {text}"
-        
-        return {
-            "original_text": text,
-            "translated_text": translated_text,
-            "source_language": source_language,
-            "target_language": target_language,
-            "mock": True
-        }
-    
-    else:
-        # Real implementation using translation API
-        try:
-            # Example using a generic translation API (replace with your preferred provider)
-            translation_api_key = os.environ.get('TRANSLATION_API_KEY')
-            if not translation_api_key:
-                logger.warning("No translation API key configured, using mock response")
-                return translation(params, context)
-                
-            api_url = "https://api.translation-provider.com/translate"
-            headers = {
-                "Authorization": f"Bearer {translation_api_key}",
-                "Content-Type": "application/json"
-            }
-            payload = {
-                "text": text,
-                "source": source_language,
-                "target": target_language
-            }
-            
-            response = requests.post(api_url, headers=headers, json=payload)
-            response.raise_for_status()
-            
-            # Parse response (adjust based on actual API response format)
-            api_response = response.json()
-            
-            return {
-                "original_text": text,
-                "translated_text": api_response.get("translated_text"),
-                "source_language": api_response.get("detected_source") or source_language,
-                "target_language": target_language
-            }
-            
-        except Exception as e:
-            logger.exception(f"Error in translation: {str(e)}")
-            raise ValueError(f"Translation failed: {str(e)}"),
             {
                 "title": f"Result 2 for {query}",
                 "link": "https://example.com/2",
@@ -388,6 +164,80 @@ def calculate(params: Dict[str, Any], context: Optional[Dict[str, Any]] = None) 
     except Exception as e:
         logger.exception(f"Error in calculation: {str(e)}")
         raise ValueError(f"Calculation failed: {str(e)}")
+
+def document_retrieval(params: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """
+    Retrieve documents from a knowledge base
+    
+    Args:
+        params:
+            query (str): Search query for documents
+            collection (str, optional): Collection to search
+            limit (int, optional): Maximum number of documents to return
+        context: Execution context
+        
+    Returns:
+        Dictionary with retrieved documents
+    """
+    query = params.get('query')
+    if not query:
+        raise ValueError("Query parameter is required")
+        
+    collection = params.get('collection', 'default')
+    limit = params.get('limit', 5)
+    
+    # Mock implementation for development/testing
+    use_mock = os.environ.get('USE_MOCK_TOOLS', 'false').lower() == 'true'
+    
+    if use_mock:
+        logger.info(f"[MOCK] Document retrieval - Query: {query}, Collection: {collection}")
+        time.sleep(1)  # Simulate API delay
+        
+        mock_docs = [
+            {
+                "id": "doc-1",
+                "title": f"Document about {query}",
+                "content": f"This document contains information about {query}. It discusses key concepts and provides examples.",
+                "metadata": {
+                    "source": "knowledge_base",
+                    "created_at": "2024-01-15T10:30:00Z",
+                    "collection": collection
+                }
+            },
+            {
+                "id": "doc-2",
+                "title": f"Understanding {query}",
+                "content": f"A comprehensive guide to understanding {query} and related concepts. This document provides in-depth explanations and case studies.",
+                "metadata": {
+                    "source": "knowledge_base",
+                    "created_at": "2024-02-20T14:45:00Z",
+                    "collection": collection
+                }
+            },
+            {
+                "id": "doc-3",
+                "title": f"Best practices for {query}",
+                "content": f"Learn about best practices and recommended approaches for working with {query}. This guide includes tips, tricks, and common pitfalls to avoid.",
+                "metadata": {
+                    "source": "knowledge_base",
+                    "created_at": "2024-03-10T09:15:00Z",
+                    "collection": collection
+                }
+            }
+        ]
+        
+        return {
+            "query": query,
+            "collection": collection,
+            "documents": mock_docs[:limit],
+            "total": len(mock_docs)
+        }
+    
+    else:
+        # In a real implementation, connect to a vector database or knowledge base
+        # This is a placeholder for the actual implementation
+        logger.warning("Real document retrieval not implemented, using mock data")
+        return document_retrieval(params, context)
 
 def data_analysis(params: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """
@@ -692,3 +542,153 @@ def code_execution(params: Dict[str, Any], context: Optional[Dict[str, Any]] = N
                 "error": str(e),
                 "success": False
             }
+
+def translation(params: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """
+    Translate text from one language to another
+    
+    Args:
+        params:
+            text (str): Text to translate
+            source_language (str, optional): Source language code
+            target_language (str): Target language code
+        context: Execution context
+        
+    Returns:
+        Dictionary with translated text
+    """
+    text = params.get('text')
+    if not text:
+        raise ValueError("Text parameter is required")
+        
+    target_language = params.get('target_language')
+    if not target_language:
+        raise ValueError("Target language parameter is required")
+        
+    source_language = params.get('source_language', 'auto')
+    
+    # Mock implementation for development/testing
+    use_mock = os.environ.get('USE_MOCK_TOOLS', 'false').lower() == 'true'
+    
+    if use_mock:
+        logger.info(f"[MOCK] Translation - Text: {text[:50]}..., Source: {source_language}, Target: {target_language}")
+        time.sleep(1)  # Simulate API delay
+        
+        # Simple mock translation (just adds language code as prefix)
+        translated_text = f"[{target_language}] {text}"
+        
+        return {
+            "original_text": text,
+            "translated_text": translated_text,
+            "source_language": source_language,
+            "target_language": target_language,
+            "mock": True
+        }
+    
+    else:
+        # Real implementation using translation API
+        try:
+            # Example using a generic translation API (replace with your preferred provider)
+            translation_api_key = os.environ.get('TRANSLATION_API_KEY')
+            if not translation_api_key:
+                logger.warning("No translation API key configured, using mock response")
+                return translation(params, context)
+                
+            api_url = "https://api.translation-provider.com/translate"
+            headers = {
+                "Authorization": f"Bearer {translation_api_key}",
+                "Content-Type": "application/json"
+            }
+            payload = {
+                "text": text,
+                "source": source_language,
+                "target": target_language
+            }
+            
+            response = requests.post(api_url, headers=headers, json=payload)
+            response.raise_for_status()
+            
+            # Parse response (adjust based on actual API response format)
+            api_response = response.json()
+            
+            return {
+                "original_text": text,
+                "translated_text": api_response.get("translated_text"),
+                "source_language": api_response.get("detected_source") or source_language,
+                "target_language": target_language
+            }
+            
+        except Exception as e:
+            logger.exception(f"Error in translation: {str(e)}")
+            raise ValueError(f"Translation failed: {str(e)}")
+
+def image_generation(params: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """
+    Generate an image based on a text prompt
+    
+    Args:
+        params:
+            prompt (str): Text description of the desired image
+            style (str, optional): Style of the image
+            size (str, optional): Size of the image (e.g., "512x512")
+        context: Execution context
+        
+    Returns:
+        Dictionary with image URL or data
+    """
+    prompt = params.get('prompt')
+    if not prompt:
+        raise ValueError("Prompt parameter is required")
+        
+    style = params.get('style', 'natural')
+    size = params.get('size', '512x512')
+    
+    # Mock implementation for development/testing
+    use_mock = os.environ.get('USE_MOCK_TOOLS', 'false').lower() == 'true'
+    image_api_key = os.environ.get('IMAGE_API_KEY')
+    
+    if use_mock or not image_api_key:
+        logger.info(f"[MOCK] Image generation - Prompt: {prompt}, Style: {style}")
+        time.sleep(2)  # Simulate API delay
+        
+        # Return a placeholder image URL
+        return {
+            "prompt": prompt,
+            "style": style,
+            "size": size,
+            "image_url": f"https://placehold.co/{size}?text={prompt[:20]}",
+            "mock": True
+        }
+    
+    else:
+        # Real implementation using image generation API
+        try:
+            # Example using a generic image API (replace with your preferred provider)
+            api_url = "https://api.image-provider.com/generate"
+            headers = {
+                "Authorization": f"Bearer {image_api_key}",
+                "Content-Type": "application/json"
+            }
+            payload = {
+                "prompt": prompt,
+                "style": style,
+                "size": size
+            }
+            
+            response = requests.post(api_url, headers=headers, json=payload)
+            response.raise_for_status()
+            
+            # Parse response (adjust based on actual API response format)
+            api_response = response.json()
+            
+            return {
+                "prompt": prompt,
+                "style": style,
+                "size": size,
+                "image_url": api_response.get("url"),
+                "image_id": api_response.get("id")
+            }
+            
+        except Exception as e:
+            logger.exception(f"Error in image generation: {str(e)}")
+            raise ValueError(f"Image generation failed: {str(e)}")
