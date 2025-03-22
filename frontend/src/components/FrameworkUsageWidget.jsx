@@ -68,6 +68,7 @@ const FrameworkUsageWidget = () => {
     fetchData();
   }, []);
 
+  // Custom tooltip component
   const CustomTooltip = ({ active, payload }) => {
     if (active && payload && payload.length) {
       return (
@@ -79,7 +80,7 @@ const FrameworkUsageWidget = () => {
           borderRadius="md"
           boxShadow="sm"
         >
-          <Text fontWeight="bold" color={payload[0].payload.fill}>
+          <Text fontWeight="bold" color={FRAMEWORK_COLORS[payload[0].payload.id]}>
             {payload[0].name}: {payload[0].value}%
           </Text>
         </Box>
@@ -87,6 +88,28 @@ const FrameworkUsageWidget = () => {
     }
     
     return null;
+  };
+
+  // Custom label component for pie chart
+  const renderCustomizedLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent, index, name }) => {
+    const RADIAN = Math.PI / 180;
+    const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
+    const x = cx + radius * Math.cos(-midAngle * RADIAN);
+    const y = cy + radius * Math.sin(-midAngle * RADIAN);
+    
+    return (
+      <text 
+        x={x} 
+        y={y} 
+        fill="white" 
+        textAnchor={x > cx ? 'start' : 'end'} 
+        dominantBaseline="central"
+        fontSize="12"
+        fontWeight="bold"
+      >
+        {`${name}: ${(percent * 100).toFixed(0)}%`}
+      </text>
+    );
   };
 
   if (isLoading) {
@@ -141,18 +164,17 @@ const FrameworkUsageWidget = () => {
         Distribution of AI frameworks across all flows
       </Text>
       
-      <ResponsiveContainer width="100%" height="80%">
+      <ResponsiveContainer width="100%" height="75%">
         <PieChart>
           <Pie
             data={data}
             cx="50%"
             cy="50%"
             labelLine={false}
+            label={renderCustomizedLabel}
             outerRadius={80}
             fill="#8884d8"
             dataKey="value"
-            nameKey="name"
-            label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
           >
             {data.map((entry) => (
               <Cell 
@@ -162,7 +184,17 @@ const FrameworkUsageWidget = () => {
             ))}
           </Pie>
           <Tooltip content={<CustomTooltip />} />
-          <Legend />
+          <Legend 
+            verticalAlign="bottom"
+            align="center"
+            layout="horizontal"
+            iconType="circle"
+            formatter={(value, entry) => (
+              <span style={{ color: textColor }}>
+                {value}
+              </span>
+            )}
+          />
         </PieChart>
       </ResponsiveContainer>
     </Box>
