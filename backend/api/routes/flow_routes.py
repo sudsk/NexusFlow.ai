@@ -24,8 +24,7 @@ router = APIRouter(prefix="/flows", tags=["flows"])
 def get_flow_service(db: Session = Depends(get_db)):
     """Dependency to get the flow service"""
     flow_repo = FlowRepository(db)
-    adapter_registry = get_adapter_registry()
-    return FlowService(flow_repo, adapter_registry)
+    return FlowService(flow_repo)
 
 @router.post("/", response_model=FlowResponse, status_code=status.HTTP_201_CREATED)
 async def create_flow(
