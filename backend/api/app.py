@@ -32,6 +32,9 @@ app = FastAPI(
     redoc_url="/redoc"
 )
 
+# Add to the beginning of backend/db/session.py
+print(f"Database connection: {DB_HOST}:{DB_PORT}/{DB_NAME} as {DB_USER}")
+
 # Configure CORS
 print(os.environ.get("ALLOWED_ORIGINS", "*"))
 app.add_middleware(
