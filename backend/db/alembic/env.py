@@ -10,13 +10,23 @@ import os
 import sys
 
 # Add parent directory to path so we can import models
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, root_dir)
 
-from backend.db.models.base import Base
-from backend.db.models.flow_model import FlowModel, ExecutionModel
-from backend.db.models.tool_model import ToolModel
-from backend.db.models.deployment_model import DeploymentModel
-
+# Try both absolute and relative imports
+try:
+    from backend.db.models.base import Base
+    from backend.db.models.flow_model import FlowModel, ExecutionModel
+    from backend.db.models.tool_model import ToolModel
+    from backend.db.models.deployment_model import DeploymentModel
+except ModuleNotFoundError:
+    # If absolute import fails, try relative import
+    sys.path.insert(0, os.path.dirname(root_dir))
+    from backend.db.models.base import Base
+    from backend.db.models.flow_model import FlowModel, ExecutionModel
+    from backend.db.models.tool_model import ToolModel
+    from backend.db.models.deployment_model import DeploymentModel
+    
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
