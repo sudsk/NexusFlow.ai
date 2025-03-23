@@ -760,11 +760,22 @@ class LangGraphAdapter(FrameworkAdapter):
             description = tool_config.get("description", "")
             
             # Create the Tool using LangChain's Tool class
+            # Capture tool_name in closure to avoid issues with lambda
+            def create_tool_executor(tool_name):
+                def tool_executor(**kwargs):
+                    return self._execute_tool(tool_name, kwargs)
+                return tool_executor
+                
+            def create_async_tool_executor(tool_name):
+                async def async_tool_executor(**kwargs):
+                    return await self._execute_tool_async(tool_name, kwargs)
+                return async_tool_executor
+                
             tools[tool_name] = self.Tool(
                 name=tool_name,
                 description=description,
-                func=lambda **kwargs, tool_name=tool_name: self._execute_tool(tool_name, kwargs),
-                coroutine=lambda **kwargs, tool_name=tool_name: self._execute_tool_async(tool_name, kwargs)
+                func=create_tool_executor(tool_name),
+                coroutine=create_async_tool_executor(tool_name)
             )
             
         return tools
