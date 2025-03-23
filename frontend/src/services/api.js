@@ -486,6 +486,8 @@ const apiService = {
     update: (deploymentId, deploymentData) => api.put(`/deployments/${deploymentId}`, deploymentData),
     delete: (deploymentId) => api.delete(`/deployments/${deploymentId}`),
     deactivate: (deploymentId) => api.post(`/deployments/${deploymentId}/deactivate`),
+    // Add this new method to get all deployments
+    getAll: () => api.get('/deployments'),    
   },
   
   // Authentication helpers
