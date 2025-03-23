@@ -52,3 +52,7 @@ class DeploymentRepository:
     def get_active_deployments(self) -> List[DeploymentModel]:
         """Get all active deployments"""
         return self.db.query(DeploymentModel).filter(DeploymentModel.status == "active").all()
+
+    def get_all(self) -> List[DeploymentModel]:
+        """Get all deployments"""
+        return self.db.query(DeploymentModel).all()
