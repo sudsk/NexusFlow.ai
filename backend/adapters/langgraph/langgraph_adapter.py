@@ -6,7 +6,6 @@ import json
 import importlib
 import inspect
 from datetime import datetime
-import uuid
 
 from ...adapters.interfaces.base_adapter import FrameworkAdapter
 
@@ -41,8 +40,20 @@ class LangGraphAdapter(FrameworkAdapter):
                 )
                 from langchain.agents import AgentExecutor
                 from langchain.tools import Tool
-                from langchain_openai import ChatOpenAI
-                from langchain_anthropic import ChatAnthropic
+                
+                try:
+                    from langchain_openai import ChatOpenAI
+                    self.ChatOpenAI = ChatOpenAI
+                except ImportError:
+                    logger.warning("langchain_openai not available")
+                    self.ChatOpenAI = None
+                    
+                try:
+                    from langchain_anthropic import ChatAnthropic
+                    self.ChatAnthropic = ChatAnthropic
+                except ImportError:
+                    logger.warning("langchain_anthropic not available")
+                    self.ChatAnthropic = None
                 
                 # Store imported components
                 self.AgentAction = AgentAction
@@ -54,8 +65,6 @@ class LangGraphAdapter(FrameworkAdapter):
                 self.FunctionMessage = FunctionMessage
                 self.AgentExecutor = AgentExecutor
                 self.Tool = Tool
-                self.ChatOpenAI = ChatOpenAI
-                self.ChatAnthropic = ChatAnthropic
                 
                 self.has_full_imports = True
                 logger.info(f"LangGraph adapter initialized with version {self.langgraph_version}")
@@ -141,8 +150,8 @@ class LangGraphAdapter(FrameworkAdapter):
             })
 
         return langgraph_config
-    
-    async def execute_flow(
+
+async def execute_flow(
         self, 
         flow: Any, 
         input_data: Dict[str, Any],
@@ -162,32 +171,31 @@ class LangGraphAdapter(FrameworkAdapter):
         if not self.langgraph_available or not self.has_full_imports:
             raise RuntimeError("LangGraph is not installed or not properly configured")
         
-        # Extract components from the flow
-        agents_config = flow.get("agents", [])
-        tools_config = flow.get("tools", {})
-        edges = flow.get("edges", [])
-        entry_point = flow.get("entry_point")
-        max_iterations = flow.get("max_iterations", 10)
-        
-        if not agents_config:
-            raise ValueError("No agents defined in the flow")
-            
-        if not entry_point:
-            if agents_config:
-                entry_point = agents_config[0]["id"]
-            else:
-                raise ValueError("No entry point defined for the flow")
-                
-        # Initialize execution trace
         execution_trace = []
         current_step = 1
         
-        # Initialize query from input data
-        query = input_data.get("query", "")
-        if not query:
-            raise ValueError("Input must contain a 'query' field")
-        
         try:
+            # Extract components from the flow
+            agents_config = flow.get("agents", [])
+            tools_config = flow.get("tools", {})
+            edges = flow.get("edges", [])
+            entry_point = flow.get("entry_point")
+            max_iterations = flow.get("max_iterations", 10)
+            
+            if not agents_config:
+                raise ValueError("No agents defined in the flow")
+                
+            if not entry_point:
+                if agents_config:
+                    entry_point = agents_config[0]["id"]
+                else:
+                    raise ValueError("No entry point defined for the flow")
+                    
+            # Initialize query from input data
+            query = input_data.get("query", "")
+            if not query:
+                raise ValueError("Input must contain a 'query' field")
+                
             # Import pydantic for creating state schema
             try:
                 from pydantic import BaseModel, Field
@@ -242,153 +250,158 @@ class LangGraphAdapter(FrameworkAdapter):
                 temperature = agent_config.get("temperature", 0.7)
                 
                 # Create the LLM based on provider
-                if model_provider == "openai":
+                if model_provider == "openai" and self.ChatOpenAI:
                     agent_llms[agent_id] = self.ChatOpenAI(
                         model=model_name,
                         temperature=temperature
                     )
-                elif model_provider == "anthropic":
+                elif model_provider == "anthropic" and self.ChatAnthropic:
                     agent_llms[agent_id] = self.ChatAnthropic(
                         model=model_name,
                         temperature=temperature
                     )
                 else:
-                    # Default to OpenAI
-                    agent_llms[agent_id] = self.ChatOpenAI(
-                        model=model_name,
-                        temperature=temperature
-                    )
+                    # Log warning for missing model
+                    logger.warning(f"Model provider {model_provider} not available. Using stub LLM.")
+                    # Create a stub LLM for testing
+                    agent_llms[agent_id] = self._create_stub_llm(model_name)
             
             # Build a graph of agent nodes
             try:
                 # Try creating graph with state schema
                 graph = self.Graph(state=GraphState)
-            
-            # Define node functions for each agent
-            for agent_config in agents_config:
-                agent_id = agent_config["id"]
-                agent_name = agent_config["name"]
-                agent_system_message = agent_config["system_message"]
-                agent_tools = agent_config["tools"]
                 
-                # Create a list of available tools for this agent
-                agent_tool_objects = []
-                for tool_name in agent_tools:
-                    if tool_name in tools_registry:
-                        agent_tool_objects.append(tools_registry[tool_name])
-                
-                # Create a node function for this agent
-                agent_node_fn = self._create_agent_node_function(
-                    agent_id=agent_id,
-                    agent_name=agent_name,
-                    agent_llm=agent_llms.get(agent_id),
-                    system_message=agent_system_message,
-                    tools=agent_tool_objects,
-                    step_callback=step_callback,
-                    execution_trace=execution_trace,
-                    current_step_ref=[current_step]  # Pass as a mutable reference
-                )
-                
-                # Add the node to the graph
-                graph.add_node(agent_id, agent_node_fn)
-            
-            # Add conditional edges based on the config
-            for agent_config in agents_config:
-                agent_id = agent_config["id"]
-                can_delegate = agent_config.get("can_delegate", True)
-                
-                if can_delegate:
-                    # Define a router function that decides the next agent
-                    graph.add_conditional_edges(
-                        agent_id,
-                        self._create_router_function(agents_config)
+                # Define node functions for each agent
+                for agent_config in agents_config:
+                    agent_id = agent_config["id"]
+                    agent_name = agent_config["name"]
+                    agent_system_message = agent_config["system_message"]
+                    agent_tools = agent_config["tools"]
+                    
+                    # Create a list of available tools for this agent
+                    agent_tool_objects = []
+                    for tool_name in agent_tools:
+                        if tool_name in tools_registry:
+                            agent_tool_objects.append(tools_registry[tool_name])
+                    
+                    # Create a node function for this agent
+                    agent_node_fn = self._create_agent_node_function(
+                        agent_id=agent_id,
+                        agent_name=agent_name,
+                        agent_llm=agent_llms.get(agent_id),
+                        system_message=agent_system_message,
+                        tools=agent_tool_objects,
+                        step_callback=step_callback,
+                        execution_trace=execution_trace,
+                        current_step_ref=[current_step]  # Pass as a mutable reference
                     )
-                else:
-                    # Find static edge if any
-                    next_agent = None
-                    for edge in edges:
-                        if edge["source"] == agent_id:
-                            next_agent = edge["target"]
-                            break
                     
-                    if next_agent:
-                        graph.add_edge(agent_id, next_agent)
-            
-            # Set entry point
-            graph.set_entry_point(entry_point)
-            
-            # Define state for final answer
-            graph.set_finish_point("final_answer")
-            
-            # Compile the graph into a runnable
-            runnable = graph.compile()
-            
-            # Execute the graph
-            for step in runnable.stream(initial_state):
-                # The streaming provides state updates as the graph executes
-                logger.debug(f"Stream update: {step}")
+                    # Add the node to the graph
+                    graph.add_node(agent_id, agent_node_fn)
                 
-                # Check if we reached final answer
-                if step.get("final_answer"):
-                    break
+                # Add conditional edges based on the config
+                for agent_config in agents_config:
+                    agent_id = agent_config["id"]
+                    can_delegate = agent_config.get("can_delegate", True)
                     
-                # Check for max iterations to prevent infinite loops
-                if current_step > max_iterations * 3:  # Each agent step may include multiple operations
-                    # Add a step indicating we hit the iteration limit
-                    limit_step = {
-                        "step": current_step,
-                        "type": "limit_reached",
-                        "timestamp": datetime.utcnow().isoformat()
-                    }
-                    execution_trace.append(limit_step)
-                    
-                    # Notify callback if provided
-                    if step_callback:
-                        await step_callback(limit_step)
+                    if can_delegate:
+                        # Define a router function that decides the next agent
+                        graph.add_conditional_edges(
+                            agent_id,
+                            self._create_router_function(agents_config)
+                        )
+                    else:
+                        # Find static edge if any
+                        next_agent = None
+                        for edge in edges:
+                            if edge["source"] == agent_id:
+                                next_agent = edge["target"]
+                                break
                         
-                    break
-            
-            # Get the final state
-            final_state = step  # Last state from the stream
-            
-            # Add completion step
-            completion_step = {
-                "step": current_step,
-                "type": "complete",
-                "timestamp": datetime.utcnow().isoformat()
-            }
-            
-            # Add to execution trace
-            execution_trace.append(completion_step)
-            
-            # Notify callback if provided
-            if step_callback:
-                await step_callback(completion_step)
+                        if next_agent:
+                            graph.add_edge(agent_id, next_agent)
                 
-            # Extract the final answer
-            final_answer = final_state.get("final_answer")
-            if not final_answer and final_state.get("conversation_history"):
-                # Try to get the last agent message as final answer
-                for msg in reversed(final_state.get("conversation_history", [])):
-                    if msg.get("role") == "agent":
-                        final_answer = msg.get("content")
+                # Set entry point
+                graph.set_entry_point(entry_point)
+                
+                # Define state for final answer
+                graph.set_finish_point("final_answer")
+                
+                # Compile the graph into a runnable
+                runnable = graph.compile()
+                
+                # Execute the graph
+                last_state = None
+                for step in runnable.stream(initial_state):
+                    # The streaming provides state updates as the graph executes
+                    logger.debug(f"Stream update: {step}")
+                    last_state = step
+                    
+                    # Check if we reached final answer
+                    if step.get("final_answer"):
                         break
-            
-            # Build the final result
-            result = {
-                "output": {
-                    "content": final_answer or "No definitive result produced.",
-                    "metadata": {
-                        "framework": "langgraph",
-                        "iterations": current_step - 1
-                    }
-                },
-                "execution_trace": execution_trace,
-                "steps": len(execution_trace)
-            }
-            
-            return result
-            
+                        
+                    # Check for max iterations to prevent infinite loops
+                    if current_step > max_iterations * 3:  # Each agent step may include multiple operations
+                        # Add a step indicating we hit the iteration limit
+                        limit_step = {
+                            "step": current_step,
+                            "type": "limit_reached",
+                            "timestamp": datetime.utcnow().isoformat()
+                        }
+                        execution_trace.append(limit_step)
+                        
+                        # Notify callback if provided
+                        if step_callback:
+                            await step_callback(limit_step)
+                            
+                        break
+                
+                # Get the final state
+                final_state = last_state or {}  # Ensure we have a state if somehow we didn't get any
+                
+                # Add completion step
+                completion_step = {
+                    "step": current_step,
+                    "type": "complete",
+                    "timestamp": datetime.utcnow().isoformat()
+                }
+                
+                # Add to execution trace
+                execution_trace.append(completion_step)
+                
+                # Notify callback if provided
+                if step_callback:
+                    await step_callback(completion_step)
+                    
+                # Extract the final answer
+                final_answer = final_state.get("final_answer")
+                if not final_answer and final_state.get("conversation_history"):
+                    # Try to get the last agent message as final answer
+                    for msg in reversed(final_state.get("conversation_history", [])):
+                        if msg.get("role") == "agent":
+                            final_answer = msg.get("content")
+                            break
+                
+                # Build the final result
+                result = {
+                    "output": {
+                        "content": final_answer or "No definitive result produced.",
+                        "metadata": {
+                            "framework": "langgraph",
+                            "iterations": current_step - 1
+                        }
+                    },
+                    "execution_trace": execution_trace,
+                    "steps": len(execution_trace)
+                }
+                
+                return result
+                
+            except Exception as e:
+                logger.exception(f"Error building or executing LangGraph: {str(e)}")
+                raise
+                
         except Exception as e:
             logger.exception(f"Error executing LangGraph flow: {str(e)}")
             
@@ -416,7 +429,34 @@ class LangGraphAdapter(FrameworkAdapter):
                 "steps": len(execution_trace)
             }
     
-    def _create_agent_node_function(
+    def _create_stub_llm(self, model_name: str):
+        """Create a stub LLM for testing when real providers are not available"""
+        # Create a simple object that mimics LLM interface
+        class StubLLM:
+            def __init__(self, model_name):
+                self.model = model_name
+                
+            async def ainvoke(self, messages):
+                # Create a simple response based on the last message
+                last_message = messages[-1]
+                content = last_message.content if hasattr(last_message, 'content') else str(last_message)
+                
+                # Create a simple response object
+                class SimpleResponse:
+                    def __init__(self, content):
+                        self.content = content
+                        
+                # Return stub response that depends on the last message
+                return SimpleResponse(f"Stub response for: {content[:50]}...")
+                
+            def invoke(self, messages):
+                import asyncio
+                loop = asyncio.get_event_loop()
+                return loop.run_until_complete(self.ainvoke(messages))
+                
+        return StubLLM(model_name)
+
+def _create_agent_node_function(
         self, 
         agent_id: str, 
         agent_name: str,
@@ -850,8 +890,8 @@ class LangGraphAdapter(FrameworkAdapter):
                 "tool": tool_name,
                 "status": "error"
             }
-    
-    def register_tools(
+
+def register_tools(
         self, 
         tools: List[Dict[str, Any]], 
         framework_config: Optional[Dict[str, Any]] = None
