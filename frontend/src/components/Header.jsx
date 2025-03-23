@@ -42,7 +42,6 @@ const Header = ({ onToggleSidebar, isSidebarOpen }) => {
   };
   
   const isAuthenticated = apiService.auth.isAuthenticated();
-  const isMockMode = apiService.mock.isEnabled();
 
   return (
     <Box 
@@ -70,13 +69,7 @@ const Header = ({ onToggleSidebar, isSidebarOpen }) => {
         <Heading size="md" color="brand.500">
           NexusFlow.ai
         </Heading>
-        
-        {isMockMode && (
-          <Box ml={4} px={2} py={1} bg="yellow.100" color="yellow.800" borderRadius="md" fontSize="xs">
-            Mock API Mode
-          </Box>
-        )}
-        
+  
         <Spacer />
         
         <HStack spacing={2}>
