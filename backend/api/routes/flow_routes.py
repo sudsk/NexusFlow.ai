@@ -26,7 +26,7 @@ def get_flow_service(db: Session = Depends(get_db)):
     flow_repo = FlowRepository(db)
     return FlowService(flow_repo)
 
-@router.post("/", response_model=FlowResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=FlowResponse, status_code=status.HTTP_201_CREATED)
 async def create_flow(
     request: FlowCreateRequest, 
     flow_service: FlowService = Depends(get_flow_service)
@@ -40,7 +40,7 @@ async def create_flow(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error creating flow: {str(e)}")
 
-@router.get("/", response_model=FlowListResponse)
+@router.get("", response_model=FlowListResponse)
 async def list_flows(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
