@@ -49,8 +49,8 @@ const theme = extendTheme({
 
 // Private route component to handle authentication
 const PrivateRoute = ({ children }) => {
-  // If using mock API or authenticated, render children
-  if (apiService.mock.isEnabled() || apiService.auth.isAuthenticated()) {
+  // Check if authenticated
+  if (apiService.auth.isAuthenticated()) {
     return children;
   }
   
