@@ -13,13 +13,11 @@ import apiService from '../services/api';
 const ApiConnectionChecker = ({ onConnectionStatusChange }) => {
   const [isConnected, setIsConnected] = useState(true);
   const [showAlert, setShowAlert] = useState(false);
-  const isMockMode = apiService.mock.isEnabled();
 
   // Function to check API connection
   const checkConnection = async () => {
-    // In a real implementation, this would ping the API
-    // For now, assume connection is successful in mock mode
-    const connected = isMockMode || await testApiConnection();
+    // Test the API connection
+    const connected = await testApiConnection();
     
     setIsConnected(connected);
     setShowAlert(!connected);
@@ -64,9 +62,7 @@ const ApiConnectionChecker = ({ onConnectionStatusChange }) => {
         <AlertIcon />
         <AlertTitle mr={2}>API Connection Error</AlertTitle>
         <AlertDescription>
-          {isMockMode 
-            ? 'Mock API is enabled but connection issues were detected.'
-            : 'Unable to connect to the API. Please check your connection or API key.'}
+          Unable to connect to the API. Please check your connection or API key.
         </AlertDescription>
         <CloseButton 
           position="absolute" 
