@@ -188,15 +188,47 @@ class LangGraphAdapter(FrameworkAdapter):
             raise ValueError("Input must contain a 'query' field")
         
         try:
-            # Create the LangGraph state definition
-            state_dict = {
-                "keys": ["query", "conversation_history", "current_agent", "tool_calls", "final_answer"],
-                "query": query,
-                "conversation_history": [],
-                "current_agent": entry_point,
-                "tool_calls": [],
-                "final_answer": None
-            }
+            # Import pydantic for creating state schema
+            try:
+                from pydantic import BaseModel, Field
+                from typing import List, Optional, Dict, Any
+
+                # Define the state schema using pydantic
+                class GraphState(BaseModel):
+                    query: str
+                    conversation_history: List[Dict[str, Any]] = Field(default_factory=list)
+                    current_agent: str
+                    tool_calls: List[Dict[str, Any]] = Field(default_factory=list)
+                    final_answer: Optional[str] = None
+                
+                # Create initial state
+                initial_state = {
+                    "query": query,
+                    "conversation_history": [],
+                    "current_agent": entry_point,
+                    "tool_calls": [],
+                    "final_answer": None
+                }
+                
+            except ImportError:
+                logger.warning("Pydantic not available, using dict-based state")
+                # Fallback to the older dict-based approach
+                GraphState = {
+                    "query": str,
+                    "conversation_history": list,
+                    "current_agent": str,
+                    "tool_calls": list,
+                    "final_answer": (str, type(None))
+                }
+                
+                # Create initial state
+                initial_state = {
+                    "query": query,
+                    "conversation_history": [],
+                    "current_agent": entry_point,
+                    "tool_calls": [],
+                    "final_answer": None
+                }
             
             # Create a dictionary of tools available to agents
             tools_registry = await self._build_tools_registry(tools_config)
@@ -228,7 +260,9 @@ class LangGraphAdapter(FrameworkAdapter):
                     )
             
             # Build a graph of agent nodes
-            graph = self.Graph()
+            try:
+                # Try creating graph with state schema
+                graph = self.Graph(state=GraphState)
             
             # Define node functions for each agent
             for agent_config in agents_config:
@@ -290,13 +324,7 @@ class LangGraphAdapter(FrameworkAdapter):
             runnable = graph.compile()
             
             # Execute the graph
-            for step in runnable.stream({
-                "query": query,
-                "conversation_history": [],
-                "current_agent": entry_point,
-                "tool_calls": [],
-                "final_answer": None
-            }):
+            for step in runnable.stream(initial_state):
                 # The streaming provides state updates as the graph executes
                 logger.debug(f"Stream update: {step}")
                 
