@@ -15,40 +15,40 @@ class LangGraphAdapter(FrameworkAdapter):
     """Adapter for LangGraph framework"""
 
     def __init__(self):
-    # Check if langgraph is installed
-    try:
-        self.langgraph_available = True
-        import langchain
-        self.langchain_version = langchain.__version__
-        
-        # Import LangGraph modules conditionally
+        # Check if langgraph is installed
         try:
-            import langgraph
-            from langgraph.graph import StateGraph
-            self.StateGraph = StateGraph
-            self.langgraph_version = langgraph.__version__
+            self.langgraph_available = True
+            import langchain
+            self.langchain_version = langchain.__version__
             
-            # Check if we have LangChain components
+            # Import LangGraph modules conditionally
             try:
-                from langchain_experimental import pydantic_v1
-                from langchain.agents import AgentExecutor
-                from langchain.tools import tool
-                self.AgentExecutor = AgentExecutor
-                self.tool_decorator = tool
-                self.has_full_imports = True
+                import langgraph
+                from langgraph.graph import StateGraph
+                self.StateGraph = StateGraph
+                self.langgraph_version = langgraph.__version__
+                
+                # Check if we have LangChain components
+                try:
+                    from langchain_experimental import pydantic_v1
+                    from langchain.agents import AgentExecutor
+                    from langchain.tools import tool
+                    self.AgentExecutor = AgentExecutor
+                    self.tool_decorator = tool
+                    self.has_full_imports = True
+                except ImportError as e:
+                    logger.warning(f"LangChain agent components not available: {str(e)}")
+                    self.has_full_imports = False
+                    
             except ImportError as e:
-                logger.warning(f"LangChain agent components not available: {str(e)}")
+                logger.warning(f"LangGraph components not available: {str(e)}")
+                self.langgraph_available = False
                 self.has_full_imports = False
-                
-        except ImportError as e:
-            logger.warning(f"LangGraph components not available: {str(e)}")
+                    
+        except ImportError:
             self.langgraph_available = False
+            logger.warning("LangChain not installed - some functionality may be limited")
             self.has_full_imports = False
-                
-    except ImportError:
-        self.langgraph_available = False
-        logger.warning("LangChain not installed - some functionality may be limited")
-        self.has_full_imports = False
 
     def get_framework_name(self) -> str:
         return "langgraph"
