@@ -116,6 +116,16 @@ class DeploymentService:
             return False
             
         return self.deployment_repository.update(deployment_id, {"status": "inactive"}) is not None
+
+    async def get_all_deployments(self) -> List[Dict[str, Any]]:
+        """
+        Get all deployments
+        
+        Returns:
+            List of all deployment dictionaries
+        """
+        deployments = self.deployment_repository.get_all()
+        return [self._convert_to_dict(deployment) for deployment in deployments]
     
     async def delete_deployment(self, deployment_id: str) -> bool:
         """
