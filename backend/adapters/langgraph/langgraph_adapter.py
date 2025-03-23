@@ -6,6 +6,7 @@ import json
 import importlib
 import inspect
 from datetime import datetime
+import uuid
 
 from ...adapters.interfaces.base_adapter import FrameworkAdapter
 
@@ -21,33 +22,47 @@ class LangGraphAdapter(FrameworkAdapter):
             import langchain
             self.langchain_version = getattr(langchain, '__version__', 'unknown')
             
-            # Import LangGraph modules conditionally
+            # Import LangGraph modules
             try:
                 import langgraph
                 self.langgraph_version = getattr(langgraph, '__version__', 'unknown')
                 
-                # The langgraph module structure might have changed
-                try:
-                    from langgraph.graph import StateGraph
-                    self.Graph = StateGraph
-                except ImportError:
-                    # Try older import path
-                    from langchain.graphs import Graph
-                    self.Graph = Graph
+                from langgraph.graph import StateGraph
+                self.Graph = StateGraph
                 
-                # Check if we have LangGraph components
-                try:
-                    from langchain_experimental import pydantic_v1
-                    from langchain.agents import AgentExecutor, tool
-                    self.AgentExecutor = AgentExecutor
-                    self.tool_decorator = tool
-                    self.has_full_imports = True
-                except ImportError:
-                    self.has_full_imports = False
-                    logger.warning("LangGraph agent components not available")
-            except ImportError:
+                # Import LangChain components
+                from langchain.schema import AgentAction, AgentFinish
+                from langchain_core.messages import (
+                    AIMessage, 
+                    HumanMessage, 
+                    SystemMessage, 
+                    ChatMessage, 
+                    FunctionMessage
+                )
+                from langchain.agents import AgentExecutor
+                from langchain.tools import Tool
+                from langchain_openai import ChatOpenAI
+                from langchain_anthropic import ChatAnthropic
+                
+                # Store imported components
+                self.AgentAction = AgentAction
+                self.AgentFinish = AgentFinish
+                self.AIMessage = AIMessage
+                self.HumanMessage = HumanMessage
+                self.SystemMessage = SystemMessage
+                self.ChatMessage = ChatMessage
+                self.FunctionMessage = FunctionMessage
+                self.AgentExecutor = AgentExecutor
+                self.Tool = Tool
+                self.ChatOpenAI = ChatOpenAI
+                self.ChatAnthropic = ChatAnthropic
+                
+                self.has_full_imports = True
+                logger.info(f"LangGraph adapter initialized with version {self.langgraph_version}")
+                
+            except ImportError as e:
+                logger.warning(f"LangGraph modules not fully available: {str(e)}")
                 self.langgraph_available = False
-                logger.warning("LangGraph modules not available")
                 self.has_full_imports = False
                     
         except ImportError:
@@ -66,7 +81,6 @@ class LangGraphAdapter(FrameworkAdapter):
         max_steps = flow_config.get("max_steps", 10)
         
         # Create a proper LangGraph configuration
-        # For MVP, we'll use a simplified representation that can be executed
         langgraph_config = {
             "type": "langgraph_flow",
             "nodes": [],
@@ -145,284 +159,200 @@ class LangGraphAdapter(FrameworkAdapter):
         Returns:
             Dictionary containing execution results
         """
-        if not self.langgraph_available:
+        if not self.langgraph_available or not self.has_full_imports:
             raise RuntimeError("LangGraph is not installed or not properly configured")
         
-        # In a production implementation, we would create a real LangGraph workflow
-        # For MVP, we'll simulate the execution with proper tracing
-        execution_trace = []
-        
         # Extract components from the flow
-        agents = flow.get("agents", [])
-        tools = flow.get("tools", {})
+        agents_config = flow.get("agents", [])
+        tools_config = flow.get("tools", {})
         edges = flow.get("edges", [])
         entry_point = flow.get("entry_point")
         max_iterations = flow.get("max_iterations", 10)
         
-        if not agents:
+        if not agents_config:
             raise ValueError("No agents defined in the flow")
             
         if not entry_point:
-            if agents:
-                entry_point = agents[0]["id"]
+            if agents_config:
+                entry_point = agents_config[0]["id"]
             else:
                 raise ValueError("No entry point defined for the flow")
                 
-        # Initialize query
+        # Initialize execution trace
+        execution_trace = []
+        current_step = 1
+        
+        # Initialize query from input data
         query = input_data.get("query", "")
         if not query:
             raise ValueError("Input must contain a 'query' field")
-            
-        # Initialize state
-        state = {
-            "query": query,
-            "conversation_history": [],
-            "iteration": 0,
-            "result": None,
-            "_all_agents": agents
-        }
-        
-        # Add any additional input data to the state
-        for key, value in input_data.items():
-            if key != "query":
-                state[key] = value
-                
-        # Start with the entry point
-        current_agent_id = entry_point
-        current_step = 1
         
         try:
-            # Execute the flow until max iterations or completion
-            while state["iteration"] < max_iterations:
-                # Find current agent
-                current_agent = next((a for a in agents if a["id"] == current_agent_id), None)
+            # Create the LangGraph state definition
+            state_dict = {
+                "keys": ["query", "conversation_history", "current_agent", "tool_calls", "final_answer"],
+                "query": query,
+                "conversation_history": [],
+                "current_agent": entry_point,
+                "tool_calls": [],
+                "final_answer": None
+            }
+            
+            # Create a dictionary of tools available to agents
+            tools_registry = await self._build_tools_registry(tools_config)
+            
+            # Create agent LLM instances
+            agent_llms = {}
+            for agent_config in agents_config:
+                agent_id = agent_config["id"]
+                model_provider = agent_config["model_provider"]
+                model_name = agent_config["model_name"]
+                temperature = agent_config.get("temperature", 0.7)
                 
-                if not current_agent:
-                    raise ValueError(f"Agent with ID {current_agent_id} not found")
+                # Create the LLM based on provider
+                if model_provider == "openai":
+                    agent_llms[agent_id] = self.ChatOpenAI(
+                        model=model_name,
+                        temperature=temperature
+                    )
+                elif model_provider == "anthropic":
+                    agent_llms[agent_id] = self.ChatAnthropic(
+                        model=model_name,
+                        temperature=temperature
+                    )
+                else:
+                    # Default to OpenAI
+                    agent_llms[agent_id] = self.ChatOpenAI(
+                        model=model_name,
+                        temperature=temperature
+                    )
+            
+            # Build a graph of agent nodes
+            graph = self.Graph()
+            
+            # Define node functions for each agent
+            for agent_config in agents_config:
+                agent_id = agent_config["id"]
+                agent_name = agent_config["name"]
+                agent_system_message = agent_config["system_message"]
+                agent_tools = agent_config["tools"]
                 
-                # Create step record for execution trace
-                step_record = {
-                    "step": current_step,
-                    "agent_id": current_agent_id,
-                    "agent_name": current_agent["name"],
-                    "type": "agent_execution",
-                    "input": {
-                        "query": state["query"],
-                        "conversation_history": state["conversation_history"]
-                    },
-                    "timestamp": datetime.utcnow().isoformat()
-                }
+                # Create a list of available tools for this agent
+                agent_tool_objects = []
+                for tool_name in agent_tools:
+                    if tool_name in tools_registry:
+                        agent_tool_objects.append(tools_registry[tool_name])
                 
-                # Simulate agent execution
-                # In a real implementation, this would create a LangGraph node and execute it
-                agent_response = await self._simulate_agent_execution(
-                    agent=current_agent,
-                    state=state,
-                    tools=tools
+                # Create a node function for this agent
+                agent_node_fn = self._create_agent_node_function(
+                    agent_id=agent_id,
+                    agent_name=agent_name,
+                    agent_llm=agent_llms.get(agent_id),
+                    system_message=agent_system_message,
+                    tools=agent_tool_objects,
+                    step_callback=step_callback,
+                    execution_trace=execution_trace,
+                    current_step_ref=[current_step]  # Pass as a mutable reference
                 )
                 
-                # Update step record with agent response
-                step_record["output"] = {
-                    "content": agent_response.get("content", ""),
-                    "metadata": {
-                        "model": f"{current_agent['model_provider']}/{current_agent['model_name']}"
-                    }
-                }
+                # Add the node to the graph
+                graph.add_node(agent_id, agent_node_fn)
+            
+            # Add conditional edges based on the config
+            for agent_config in agents_config:
+                agent_id = agent_config["id"]
+                can_delegate = agent_config.get("can_delegate", True)
                 
-                # Add to execution trace
-                execution_trace.append(step_record)
-                
-                # Notify callback if provided
-                if step_callback:
-                    await step_callback(step_record)
-                
-                # Increment step counter
-                current_step += 1
-                
-                # Add to conversation history
-                state["conversation_history"].append({
-                    "role": "agent",
-                    "name": current_agent["name"],
-                    "content": agent_response.get("content", "")
-                })
-                
-                # Check if agent wants to use a tool
-                if agent_response.get("use_tool"):
-                    tool_name = agent_response.get("tool_name")
-                    tool_input = agent_response.get("tool_input", {})
+                if can_delegate:
+                    # Define a router function that decides the next agent
+                    graph.add_conditional_edges(
+                        agent_id,
+                        self._create_router_function(agents_config)
+                    )
+                else:
+                    # Find static edge if any
+                    next_agent = None
+                    for edge in edges:
+                        if edge["source"] == agent_id:
+                            next_agent = edge["target"]
+                            break
                     
-                    # Check if tool exists and agent has access to it
-                    agent_tools = current_agent.get("tools", [])
-                    if tool_name in tools and tool_name in agent_tools:
-                        # Create tool step record
-                        tool_step = {
-                            "step": current_step,
-                            "agent_id": current_agent_id,
-                            "agent_name": current_agent["name"],
-                            "type": "tool_execution",
-                            "input": tool_input,
-                            "timestamp": datetime.utcnow().isoformat()
-                        }
-                        
-                        # Simulate tool execution
-                        tool_result = await self._simulate_tool_execution(
-                            tool_name=tool_name,
-                            tool_input=tool_input,
-                            tool_config=tools.get(tool_name, {})
-                        )
-                        
-                        # Update tool step with result
-                        tool_step["output"] = {
-                            "content": json.dumps(tool_result),
-                            "metadata": {"tool": tool_name}
-                        }
-                        
-                        # Add to execution trace
-                        execution_trace.append(tool_step)
-                        
-                        # Notify callback if provided
-                        if step_callback:
-                            await step_callback(tool_step)
-                            
-                        # Update state with tool result
-                        state["tool_result"] = tool_result
-                        
-                        # Add to conversation history
-                        state["conversation_history"].append({
-                            "role": "tool",
-                            "name": tool_name,
-                            "content": json.dumps(tool_result)
-                        })
-                        
-                        # Increment step counter
-                        current_step += 1
-                        
-                    else:
-                        # Tool not available to this agent
-                        state["conversation_history"].append({
-                            "role": "system",
-                            "content": f"Tool '{tool_name}' is not available to this agent"
-                        })
+                    if next_agent:
+                        graph.add_edge(agent_id, next_agent)
+            
+            # Set entry point
+            graph.set_entry_point(entry_point)
+            
+            # Define state for final answer
+            graph.set_finish_point("final_answer")
+            
+            # Compile the graph into a runnable
+            runnable = graph.compile()
+            
+            # Execute the graph
+            for step in runnable.stream({
+                "query": query,
+                "conversation_history": [],
+                "current_agent": entry_point,
+                "tool_calls": [],
+                "final_answer": None
+            }):
+                # The streaming provides state updates as the graph executes
+                logger.debug(f"Stream update: {step}")
                 
-                # Check if agent wants to delegate to another agent
-                elif agent_response.get("delegate_to"):
-                    next_agent_id = agent_response.get("delegate_to")
-                    delegation_reason = agent_response.get("delegation_reason", "")
+                # Check if we reached final answer
+                if step.get("final_answer"):
+                    break
                     
-                    # Check if agent can delegate
-                    if current_agent.get("can_delegate", True):
-                        # Create delegation step
-                        delegation_step = {
-                            "step": current_step,
-                            "agent_id": current_agent_id,
-                            "agent_name": current_agent["name"],
-                            "type": "delegation",
-                            "decision": {
-                                "action": "delegate",
-                                "target": next_agent_id,
-                                "reasoning": delegation_reason
-                            },
-                            "timestamp": datetime.utcnow().isoformat()
-                        }
-                        
-                        # Add to execution trace
-                        execution_trace.append(delegation_step)
-                        
-                        # Notify callback if provided
-                        if step_callback:
-                            await step_callback(delegation_step)
-                            
-                        # Update current agent
-                        current_agent_id = next_agent_id
-                        
-                        # Add to conversation history
-                        state["conversation_history"].append({
-                            "role": "system",
-                            "content": f"Delegating to {next_agent_id}: {delegation_reason}"
-                        })
-                        
-                        # Increment step counter
-                        current_step += 1
-                        
-                    else:
-                        # Agent cannot delegate
-                        state["conversation_history"].append({
-                            "role": "system",
-                            "content": f"Agent {current_agent['name']} cannot delegate to other agents"
-                        })
-                
-                # Check if agent has a final answer
-                elif agent_response.get("final_answer"):
-                    state["result"] = agent_response.get("final_answer")
-                    
-                    # Add completion step
-                    completion_step = {
+                # Check for max iterations to prevent infinite loops
+                if current_step > max_iterations * 3:  # Each agent step may include multiple operations
+                    # Add a step indicating we hit the iteration limit
+                    limit_step = {
                         "step": current_step,
-                        "agent_id": current_agent_id,
-                        "agent_name": current_agent["name"],
-                        "type": "complete",
+                        "type": "limit_reached",
                         "timestamp": datetime.utcnow().isoformat()
                     }
-                    
-                    # Add to execution trace
-                    execution_trace.append(completion_step)
+                    execution_trace.append(limit_step)
                     
                     # Notify callback if provided
                     if step_callback:
-                        await step_callback(completion_step)
+                        await step_callback(limit_step)
                         
-                    # Exit the loop
                     break
-                        
-                # Otherwise follow the graph to the next agent (if defined)
-                else:
-                    # Find edge from current agent
-                    next_edge = next((e for e in edges if e["source"] == current_agent_id), None)
-                    
-                    if next_edge:
-                        current_agent_id = next_edge["target"]
-                    else:
-                        # No next agent defined, use the final response as result
-                        state["result"] = agent_response.get("content")
-                        
-                        # Add completion step
-                        completion_step = {
-                            "step": current_step,
-                            "agent_id": current_agent_id,
-                            "agent_name": current_agent["name"],
-                            "type": "complete",
-                            "timestamp": datetime.utcnow().isoformat()
-                        }
-                        
-                        # Add to execution trace
-                        execution_trace.append(completion_step)
-                        
-                        # Notify callback if provided
-                        if step_callback:
-                            await step_callback(completion_step)
-                        
-                        # Exit the loop
+            
+            # Get the final state
+            final_state = step  # Last state from the stream
+            
+            # Add completion step
+            completion_step = {
+                "step": current_step,
+                "type": "complete",
+                "timestamp": datetime.utcnow().isoformat()
+            }
+            
+            # Add to execution trace
+            execution_trace.append(completion_step)
+            
+            # Notify callback if provided
+            if step_callback:
+                await step_callback(completion_step)
+                
+            # Extract the final answer
+            final_answer = final_state.get("final_answer")
+            if not final_answer and final_state.get("conversation_history"):
+                # Try to get the last agent message as final answer
+                for msg in reversed(final_state.get("conversation_history", [])):
+                    if msg.get("role") == "agent":
+                        final_answer = msg.get("content")
                         break
-                
-                # Increment iteration counter
-                state["iteration"] += 1
-                
-            # If we exit the loop without a result, use the last agent's response
-            if not state.get("result") and state.get("conversation_history"):
-                last_agent_message = next(
-                    (msg["content"] for msg in reversed(state["conversation_history"]) 
-                     if msg["role"] == "agent"),
-                    "No definitive result produced."
-                )
-                state["result"] = last_agent_message
-                
+            
             # Build the final result
             result = {
                 "output": {
-                    "content": state.get("result", "No result produced"),
+                    "content": final_answer or "No definitive result produced.",
                     "metadata": {
                         "framework": "langgraph",
-                        "iterations": state["iteration"]
+                        "iterations": current_step - 1
                     }
                 },
                 "execution_trace": execution_trace,
@@ -451,163 +381,435 @@ class LangGraphAdapter(FrameworkAdapter):
                     "error": str(e),
                     "metadata": {
                         "framework": "langgraph",
-                        "iterations": state["iteration"]
+                        "iterations": current_step
                     }
                 },
                 "execution_trace": execution_trace,
                 "steps": len(execution_trace)
             }
     
-    async def _simulate_agent_execution(
+    def _create_agent_node_function(
         self, 
-        agent: Dict[str, Any], 
-        state: Dict[str, Any],
-        tools: Dict[str, Any]
-    ) -> Dict[str, Any]:
+        agent_id: str, 
+        agent_name: str,
+        agent_llm: Any,
+        system_message: str,
+        tools: List[Any],
+        step_callback: Optional[Callable],
+        execution_trace: List[Dict[str, Any]],
+        current_step_ref: List[int]
+    ):
         """
-        Simulate LangGraph agent execution for the MVP
-        In a real implementation, this would create a LangGraph node and execute it
+        Create a node function for a LangGraph agent
         
         Args:
-            agent: Agent configuration
-            state: Current state
-            tools: Available tools
+            agent_id: ID of the agent
+            agent_name: Name of the agent
+            agent_llm: LLM instance for the agent
+            system_message: System message for the agent
+            tools: List of tools available to the agent
+            step_callback: Callback for streaming steps
+            execution_trace: Execution trace to append steps to
+            current_step_ref: Mutable reference to current step counter
             
         Returns:
-            Simulated agent response
+            Node function for LangGraph
         """
-        # For the MVP, we'll return a simulated response
-        # In production, this would use LangGraph to create and run a node
-        
-        # Simplified logic for the simulation (can be expanded later)
-        query = state.get("query", "")
-        iteration = state.get("iteration", 0)
-        agent_name = agent.get("name", "Agent")
-        agent_tools = agent.get("tools", [])
-        
-        # Simulate some processing time
-        await asyncio.sleep(0.5)
-        
-        if iteration == 0:
-            # First iteration - agent introduction
-            return {
-                "content": f"I am {agent_name}. I will help with: {query}",
-                "use_tool": len(agent_tools) > 0 and "web_search" in agent_tools,
-                "tool_name": "web_search" if "web_search" in agent_tools else None,
-                "tool_input": {"query": query} if "web_search" in agent_tools else None
-            }
-        elif "tool_result" in state:
-            # Process tool results
-            tool_result = state.get("tool_result", {})
+        async def agent_fn(state):
+            # Get current step number
+            current_step = current_step_ref[0]
             
-            if iteration >= 3:
-                # Final answer after processing enough information
-                return {
-                    "content": f"Based on my analysis of {query}, I have found the information.",
-                    "final_answer": f"Based on my analysis as {agent_name}, here's what I found about '{query}': [simulated final response based on the tool results and agent expertise]"
-                }
-            else:
-                # Continue processing or delegate
-                other_agents = [a for a in state.get("_all_agents", []) if a["id"] != agent.get("id")]
-                
-                if other_agents and iteration == 1:
-                    # Delegate to another agent
-                    next_agent = other_agents[0]
-                    return {
-                        "content": f"I'll delegate this to {next_agent['name']} for further analysis.",
-                        "delegate_to": next_agent["id"],
-                        "delegation_reason": f"Need specialized expertise from {next_agent['name']}"
-                    }
-                else:
-                    # Use another tool if available
-                    if "data_analysis" in agent_tools:
-                        return {
-                            "content": f"I'll analyze the results more deeply.",
-                            "use_tool": True,
-                            "tool_name": "data_analysis",
-                            "tool_input": {"data": tool_result, "analysis_type": "exploratory"}
-                        }
-                    else:
-                        # No other tools to use, provide an answer
-                        return {
-                            "content": f"Here's what I found about '{query}'.",
-                            "final_answer": f"Based on my research as {agent_name}, I've found information about '{query}': [simulated response based on {agent_name}'s expertise]"
-                        }
-        else:
-            # Generic response
-            return {
-                "content": f"I'm continuing to work on '{query}'.",
-                "final_answer": f"After thorough analysis as {agent_name}, I can provide this information about '{query}': [simulated final response from {agent_name}]"
+            # Extract state values
+            query = state["query"]
+            conversation_history = state["conversation_history"]
+            current_agent = state["current_agent"]
+            tool_calls = state["tool_calls"]
+            
+            # Only proceed if this agent is the current agent
+            if current_agent != agent_id:
+                return state
+            
+            # Add a step for agent execution
+            step_record = {
+                "step": current_step,
+                "agent_id": agent_id,
+                "agent_name": agent_name,
+                "type": "agent_execution",
+                "input": {
+                    "query": query,
+                    "conversation_history": conversation_history
+                },
+                "timestamp": datetime.utcnow().isoformat()
             }
+            
+            # Prepare messages for the agent
+            messages = []
+            
+            # Add system message
+            if system_message:
+                messages.append(self.SystemMessage(content=system_message))
+                
+            # Add initial query if this is the first interaction
+            if not conversation_history:
+                messages.append(self.HumanMessage(content=query))
+            else:
+                # Add conversation history
+                for msg in conversation_history:
+                    if msg["role"] == "human":
+                        messages.append(self.HumanMessage(content=msg["content"]))
+                    elif msg["role"] == "agent":
+                        messages.append(self.AIMessage(content=msg["content"]))
+                    elif msg["role"] == "system":
+                        messages.append(self.SystemMessage(content=msg["content"]))
+                    elif msg["role"] == "tool":
+                        messages.append(self.FunctionMessage(
+                            name=msg.get("name", "tool"),
+                            content=msg["content"]
+                        ))
+            
+            try:
+                # Get response from the agent
+                response = await agent_llm.ainvoke(messages)
+                
+                # Extract content from response
+                content = response.content
+                
+                # Update step record with agent response
+                step_record["output"] = {
+                    "content": content,
+                    "metadata": {
+                        "model": f"{agent_llm.model}"
+                    }
+                }
+                
+                # Add to execution trace
+                execution_trace.append(step_record)
+                
+                # Notify callback if provided
+                if step_callback:
+                    await step_callback(step_record)
+                
+                # Increment step counter
+                current_step_ref[0] += 1
+                
+                # Add to conversation history
+                conversation_history.append({
+                    "role": "agent",
+                    "name": agent_name,
+                    "content": content
+                })
+                
+                # Check if the agent wants to use a tool
+                if tools and any(tool_name.lower() in content.lower() for tool in tools for tool_name in [tool.name]):
+                    # Simple tool detection for MVP - in production use proper tool parsing
+                    for tool in tools:
+                        if tool.name.lower() in content.lower():
+                            # Extract tool input from content (simple regex)
+                            import re
+                            tool_input_match = re.search(r'{.*}', content)
+                            tool_input = {}
+                            
+                            if tool_input_match:
+                                try:
+                                    tool_input = json.loads(tool_input_match.group(0))
+                                except json.JSONDecodeError:
+                                    tool_input = {"query": query}
+                            else:
+                                tool_input = {"query": query}
+                            
+                            # Create tool step record
+                            tool_step = {
+                                "step": current_step_ref[0],
+                                "agent_id": agent_id,
+                                "agent_name": agent_name,
+                                "type": "tool_execution",
+                                "input": tool_input,
+                                "timestamp": datetime.utcnow().isoformat()
+                            }
+                            
+                            try:
+                                # Execute the tool
+                                tool_result = await tool.ainvoke(tool_input)
+                                
+                                # Update tool step with result
+                                tool_step["output"] = {
+                                    "content": json.dumps(tool_result) if isinstance(tool_result, dict) else str(tool_result),
+                                    "metadata": {"tool": tool.name}
+                                }
+                                
+                                # Add to execution trace
+                                execution_trace.append(tool_step)
+                                
+                                # Notify callback if provided
+                                if step_callback:
+                                    await step_callback(tool_step)
+                                    
+                                # Update state with tool result
+                                tool_calls.append({
+                                    "tool": tool.name,
+                                    "input": tool_input,
+                                    "output": tool_result
+                                })
+                                
+                                # Add to conversation history
+                                conversation_history.append({
+                                    "role": "tool",
+                                    "name": tool.name,
+                                    "content": json.dumps(tool_result) if isinstance(tool_result, dict) else str(tool_result)
+                                })
+                                
+                                # Increment step counter
+                                current_step_ref[0] += 1
+                                
+                            except Exception as e:
+                                # Handle tool execution error
+                                tool_step["output"] = {
+                                    "error": str(e),
+                                    "metadata": {"tool": tool.name}
+                                }
+                                
+                                # Add to execution trace
+                                execution_trace.append(tool_step)
+                                
+                                # Notify callback if provided
+                                if step_callback:
+                                    await step_callback(tool_step)
+                                    
+                                # Add to conversation history
+                                conversation_history.append({
+                                    "role": "system",
+                                    "content": f"Error executing tool {tool.name}: {str(e)}"
+                                })
+                                
+                                # Increment step counter
+                                current_step_ref[0] += 1
+                            
+                            break  # Use the first matching tool
+                
+                # Check if agent wants to delegate
+                elif "delegate to" in content.lower() or "hand off to" in content.lower():
+                    # Simple delegation detection
+                    import re
+                    delegate_match = re.search(r'delegate to (\w+[-\w+]*)', content.lower())
+                    if not delegate_match:
+                        delegate_match = re.search(r'hand off to (\w+[-\w+]*)', content.lower())
+                        
+                    if delegate_match:
+                        next_agent_id = delegate_match.group(1)
+                        
+                        # Create delegation step
+                        delegation_step = {
+                            "step": current_step_ref[0],
+                            "agent_id": agent_id,
+                            "agent_name": agent_name,
+                            "type": "delegation",
+                            "decision": {
+                                "action": "delegate",
+                                "target": next_agent_id,
+                                "reasoning": content
+                            },
+                            "timestamp": datetime.utcnow().isoformat()
+                        }
+                        
+                        # Add to execution trace
+                        execution_trace.append(delegation_step)
+                        
+                        # Notify callback if provided
+                        if step_callback:
+                            await step_callback(delegation_step)
+                            
+                        # Update state
+                        state["current_agent"] = next_agent_id
+                        
+                        # Add to conversation history
+                        conversation_history.append({
+                            "role": "system",
+                            "content": f"Delegating to {next_agent_id}: {content}"
+                        })
+                        
+                        # Increment step counter
+                        current_step_ref[0] += 1
+                
+                # Check for final answer marker
+                elif "final answer:" in content.lower() or "final response:" in content.lower():
+                    # Extract final answer
+                    final_answer_parts = content.split("Final Answer:", 1) if "Final Answer:" in content else content.split("final answer:", 1)
+                    
+                    if len(final_answer_parts) > 1:
+                        final_answer = final_answer_parts[1].strip()
+                    else:
+                        final_answer = content
+                        
+                    # Create final answer step
+                    final_step = {
+                        "step": current_step_ref[0],
+                        "agent_id": agent_id,
+                        "agent_name": agent_name,
+                        "type": "final_answer",
+                        "output": {
+                            "content": final_answer
+                        },
+                        "timestamp": datetime.utcnow().isoformat()
+                    }
+                    
+                    # Add to execution trace
+                    execution_trace.append(final_step)
+                    
+                    # Notify callback if provided
+                    if step_callback:
+                        await step_callback(final_step)
+                        
+                    # Set final answer in state
+                    state["final_answer"] = final_answer
+                    
+                    # Increment step counter
+                    current_step_ref[0] += 1
+                    
+                # Update state with conversation history
+                state["conversation_history"] = conversation_history
+                
+                return state
+                
+            except Exception as e:
+                logger.exception(f"Error in agent node function: {str(e)}")
+                
+                # Update step with error
+                step_record["output"] = {
+                    "error": str(e),
+                    "metadata": {
+                        "model": f"{agent_llm.model}"
+                    }
+                }
+                
+                # Add to execution trace
+                execution_trace.append(step_record)
+                
+                # Notify callback if provided
+                if step_callback:
+                    await step_callback(step_record)
+                    
+                # Increment step counter
+                current_step_ref[0] += 1
+                
+                # Add to conversation history
+                conversation_history.append({
+                    "role": "system",
+                    "content": f"Error in agent execution: {str(e)}"
+                })
+                
+                # Update state
+                state["conversation_history"] = conversation_history
+                
+                return state
+        
+        # Return the node function
+        return agent_fn
     
-    async def _simulate_tool_execution(
-        self,
-        tool_name: str,
-        tool_input: Dict[str, Any],
-        tool_config: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    def _create_router_function(self, agents_config: List[Dict[str, Any]]):
         """
-        Simulate tool execution for the MVP
-        In a real implementation, this would call the actual tool
+        Create a router function that determines the next agent based on state
+        
+        Args:
+            agents_config: List of agent configurations
+            
+        Returns:
+            Router function for conditional edges
+        """
+        def router(state):
+            # Get the current agent from state
+            current_agent = state.get("current_agent")
+            
+            # Check if there's a delegation
+            for msg in reversed(state.get("conversation_history", [])):
+                if msg.get("role") == "system" and "delegating to" in msg.get("content", "").lower():
+                    # Extract the agent ID from the message
+                    import re
+                    match = re.search(r"delegating to (\w+[-\w+]*)", msg.get("content", "").lower())
+                    if match:
+                        next_agent = match.group(1)
+                        # Verify the agent exists
+                        if any(agent["id"] == next_agent for agent in agents_config):
+                            return next_agent
+            
+            # Check if there's a final answer
+            if state.get("final_answer"):
+                return "final_answer"
+                
+            # Default: continue with the current agent
+            return current_agent
+            
+        return router
+    
+    async def _build_tools_registry(self, tools_config: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Build a registry of tool objects for use in the LangGraph execution
+        
+        Args:
+            tools_config: Tool configurations from the flow
+            
+        Returns:
+            Dictionary of tool objects keyed by name
+        """
+        from ...services.tool.registry_service import get_tool_registry
+        tool_registry = get_tool_registry()
+        
+        tools = {}
+        
+        for tool_name, tool_config in tools_config.items():
+            # Create a Tool object for each configured tool
+            description = tool_config.get("description", "")
+            
+            # Create the Tool using LangChain's Tool class
+            tools[tool_name] = self.Tool(
+                name=tool_name,
+                description=description,
+                func=lambda **kwargs, tool_name=tool_name: self._execute_tool(tool_name, kwargs),
+                coroutine=lambda **kwargs, tool_name=tool_name: self._execute_tool_async(tool_name, kwargs)
+            )
+            
+        return tools
+    
+    def _execute_tool(self, tool_name: str, parameters: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Synchronous wrapper for tool execution
         
         Args:
             tool_name: Name of the tool to execute
-            tool_input: Input for the tool
-            tool_config: Tool configuration
+            parameters: Parameters for the tool
             
         Returns:
-            Simulated tool result
+            Tool execution result
         """
-        # For the MVP, we'll return a simulated response
-        # In production, this would call the actual tool implementation
+        # Get event loop
+        loop = asyncio.get_event_loop()
         
-        # Simulate some processing time
-        await asyncio.sleep(0.5)
+        # Run the async function in the event loop
+        return loop.run_until_complete(self._execute_tool_async(tool_name, parameters))
+    
+    async def _execute_tool_async(self, tool_name: str, parameters: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Execute a tool using the tool registry
         
-        # Simplified simulation based on tool name
-        if tool_name == "web_search":
-            query = tool_input.get("query", "")
-            return {
-                "result": [
-                    {
-                        "title": f"Result 1 for {query}",
-                        "url": "https://example.com/1",
-                        "snippet": f"This is a simulated search result for {query}."
-                    },
-                    {
-                        "title": f"Result 2 for {query}",
-                        "url": "https://example.com/2",
-                        "snippet": f"Another simulated result for {query} with different information."
-                    }
-                ],
-                "query": query
-            }
+        Args:
+            tool_name: Name of the tool to execute
+            parameters: Parameters for the tool
             
-        elif tool_name == "data_analysis":
-            data = tool_input.get("data", [])
+        Returns:
+            Tool execution result
+        """
+        from ...services.tool.registry_service import get_tool_registry
+        tool_registry = get_tool_registry()
+        
+        try:
+            # Execute the tool through the registry
+            result = await tool_registry.execute_tool(tool_name, parameters)
+            return result
+        except Exception as e:
+            logger.exception(f"Error executing tool {tool_name}: {str(e)}")
             return {
-                "analysis": f"Simulated analysis of provided data with {len(data)} records",
-                "insights": ["Insight 1", "Insight 2", "Insight 3"],
-                "summary": "This is a simulated data analysis summary."
-            }
-            
-        elif tool_name == "code_execution":
-            language = tool_input.get("language", "python")
-            code = tool_input.get("code", "")
-            return {
-                "output": "This is simulated code execution output.\nResult: Simulated result",
-                "error": None,
-                "success": True
-            }
-            
-        else:
-            # Generic tool response
-            return {
-                "result": f"Simulated result from {tool_name}",
-                "metadata": {
-                    "tool": tool_name,
-                    "simulated": True
-                }
+                "error": str(e),
+                "tool": tool_name,
+                "status": "error"
             }
     
     def register_tools(
@@ -628,9 +830,6 @@ class LangGraphAdapter(FrameworkAdapter):
         if not self.langgraph_available:
             raise RuntimeError("LangGraph is not installed or not properly configured")
             
-        # For MVP, we'll create a simplified tool registry
-        # In a real implementation, this would register tools with LangGraph
-        
         registered_tools = {}
         
         for tool in tools:
