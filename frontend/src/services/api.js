@@ -54,6 +54,10 @@ api.interceptors.response.use(
 
 // API endpoints
 const apiService = {
+
+  // Add the health check method here
+  checkHealth: () => api.get('/health'),
+  
   // Flow endpoints
   flows: {
     getAll: (params = {}) => api.get('/flows', { params }),
