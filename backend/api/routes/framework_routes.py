@@ -13,7 +13,7 @@ def get_flow_service(db: Session = Depends(get_db)):
     flow_repo = FlowRepository(db)
     return FlowService(flow_repo)
 
-@router.get("/", response_model=Dict[str, Dict[str, bool]])
+@router.get("", response_model=Dict[str, Dict[str, bool]])
 async def get_frameworks(
     flow_service: FlowService = Depends(get_flow_service)
 ):
