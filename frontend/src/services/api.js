@@ -455,7 +455,7 @@ const apiService = {
     getById: (executionId) => api.get(`/executions/${executionId}`),
     getByFlowId: (flowId, params = {}) => api.get(`/executions/flow/${flowId}`, { params }),
     getRecent: (limit = 10) => api.get('/executions', { params: { limit } }),
-    getStats: () => api.get('/executions/stats'),
+    getStats: () => api.get('/executions/stats/'),
   },
   
   // Framework endpoints
