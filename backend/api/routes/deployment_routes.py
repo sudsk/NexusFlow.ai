@@ -102,3 +102,15 @@ async def deactivate_deployment(
         raise HTTPException(status_code=404, detail=f"Deployment with ID {deployment_id} not found")
     
     return {"message": f"Deployment with ID {deployment_id} successfully deactivated"}
+
+@router.get("", response_model=DeploymentListResponse)
+async def get_all_deployments(
+    deployment_service: DeploymentService = Depends(get_deployment_service)
+):
+    """Get all deployments"""
+    deployments = await deployment_service.get_all_deployments()
+    
+    return DeploymentListResponse(
+        items=deployments,
+        total=len(deployments)
+    )
