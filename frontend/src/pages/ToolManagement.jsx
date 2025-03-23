@@ -389,105 +389,13 @@ const ToolManagement = () => {
   const fetchTools = async () => {
     setIsLoading(true);
     try {
-      // In a real implementation, this would call the API
-      // For now, we'll use mock data
-      await new Promise((resolve) => setTimeout(resolve, 1000)); // Simulate API delay
-
-      // Mock tools data
-      const mockTools = [
-        {
-          id: '1',
-          name: 'web_search',
-          description: 'Search the web for information',
-          parameters: {
-            type: 'object',
-            properties: {
-              query: {
-                type: 'string',
-                description: 'The search query',
-              },
-            },
-            required: ['query'],
-          },
-          function_name: 'search_web',
-          is_enabled: true,
-          requires_authentication: false,
-          created_at: '2025-03-10T14:30:00Z',
-          updated_at: '2025-03-12T09:15:00Z',
-          metadata: {
-            category: 'utility',
-            tags: ['search', 'web', 'retrieval'],
-            compatible_frameworks: ['langgraph', 'crewai', 'autogen'],
-          },
-        },
-        {
-          id: '2',
-          name: 'code_execution',
-          description: 'Execute code in a secure sandbox environment',
-          parameters: {
-            type: 'object',
-            properties: {
-              language: {
-                type: 'string',
-                description: 'Programming language',
-                enum: ['python', 'javascript', 'bash'],
-              },
-              code: {
-                type: 'string',
-                description: 'Code to execute',
-              },
-            },
-            required: ['language', 'code'],
-          },
-          function_name: 'execute_code',
-          is_enabled: true,
-          requires_authentication: true,
-          created_at: '2025-03-08T11:20:00Z',
-          updated_at: '2025-03-08T11:20:00Z',
-          metadata: {
-            category: 'data_processing',
-            tags: ['code', 'execution', 'sandbox'],
-            compatible_frameworks: ['langgraph', 'autogen'],
-          },
-        },
-        {
-          id: '3',
-          name: 'data_analysis',
-          description: 'Analyze data and generate insights',
-          parameters: {
-            type: 'object',
-            properties: {
-              data_source: {
-                type: 'string',
-                description: 'URL or path to the data source',
-              },
-              analysis_type: {
-                type: 'string',
-                description: 'Type of analysis to perform',
-                enum: ['descriptive', 'exploratory', 'predictive'],
-              },
-            },
-            required: ['data_source'],
-          },
-          function_name: 'analyze_data',
-          is_enabled: false,
-          requires_authentication: false,
-          created_at: '2025-03-05T16:45:00Z',
-          updated_at: '2025-03-14T10:30:00Z',
-          metadata: {
-            category: 'data_processing',
-            tags: ['data', 'analysis', 'insights'],
-            compatible_frameworks: ['langgraph', 'crewai', 'autogen', 'dspy'],
-          },
-        },
-      ];
-
-      setTools(mockTools);
+      const response = await apiService.tools.getAll();
+      setTools(response.data.items || []);
     } catch (error) {
       console.error('Error fetching tools:', error);
       toast({
         title: 'Error fetching tools',
-        description: error.message,
+        description: error.response?.data?.detail || error.message,
         status: 'error',
         duration: 5000,
         isClosable: true,
@@ -512,14 +420,10 @@ const ToolManagement = () => {
     try {
       if (currentTool) {
         // Update existing tool
-        // In a real implementation, this would call the API
-        // await apiService.tools.update(currentTool.id, formData);
-        await new Promise((resolve) => setTimeout(resolve, 800)); // Simulate API delay
-
-        // Update state
-        setTools(
-          tools.map((t) => (t.id === currentTool.id ? { ...t, ...formData } : t))
-        );
+        const response = await apiService.tools.update(currentTool.id, formData);
+        
+        // Update state with the response data
+        setTools(tools.map((t) => (t.id === currentTool.id ? response.data : t)));
 
         toast({
           title: 'Tool updated',
@@ -530,20 +434,10 @@ const ToolManagement = () => {
         });
       } else {
         // Create new tool
-        // In a real implementation, this would call the API
-        // await apiService.tools.create(formData);
-        await new Promise((resolve) => setTimeout(resolve, 800)); // Simulate API delay
-
-        // Create a mock new tool with ID
-        const newTool = {
-          ...formData,
-          id: `${tools.length + 1}`,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        };
-
-        // Update state
-        setTools([...tools, newTool]);
+        const response = await apiService.tools.create(formData);
+        
+        // Add new tool to state
+        setTools([...tools, response.data]);
 
         toast({
           title: 'Tool created',
@@ -559,7 +453,7 @@ const ToolManagement = () => {
       console.error('Error saving tool:', error);
       toast({
         title: 'Error saving tool',
-        description: error.message,
+        description: error.response?.data?.detail || error.message,
         status: 'error',
         duration: 5000,
         isClosable: true,
@@ -569,12 +463,11 @@ const ToolManagement = () => {
     }
   };
 
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (!toolToDelete) return;
 
     try {
-      // In a real implementation, this would call the API
-      // await apiService.tools.delete(toolToDelete.id);
+      await apiService.tools.delete(toolToDelete.id);
 
       // Update state
       setTools(tools.filter((t) => t.id !== toolToDelete.id));
@@ -590,7 +483,7 @@ const ToolManagement = () => {
       console.error('Error deleting tool:', error);
       toast({
         title: 'Error deleting tool',
-        description: error.message,
+        description: error.response?.data?.detail || error.message,
         status: 'error',
         duration: 5000,
         isClosable: true,
@@ -608,17 +501,14 @@ const ToolManagement = () => {
 
   const handleToggleToolStatus = async (tool) => {
     try {
-      const updatedTool = { ...tool, is_enabled: !tool.is_enabled };
-      // In a real implementation, this would call the API
-      // await apiService.tools.update(tool.id, { is_enabled: !tool.is_enabled });
-
-      // Update state
-      setTools(
-        tools.map((t) => (t.id === tool.id ? updatedTool : t))
-      );
+      const updatedToolData = { is_enabled: !tool.is_enabled };
+      const response = await apiService.tools.update(tool.id, updatedToolData);
+      
+      // Update the tool in the state with the response data
+      setTools(tools.map((t) => (t.id === tool.id ? response.data : t)));
 
       toast({
-        title: updatedTool.is_enabled ? 'Tool enabled' : 'Tool disabled',
+        title: response.data.is_enabled ? 'Tool enabled' : 'Tool disabled',
         status: 'success',
         duration: 2000,
         isClosable: true,
@@ -627,7 +517,7 @@ const ToolManagement = () => {
       console.error('Error toggling tool status:', error);
       toast({
         title: 'Error updating tool',
-        description: error.message,
+        description: error.response?.data?.detail || error.message,
         status: 'error',
         duration: 5000,
         isClosable: true,
