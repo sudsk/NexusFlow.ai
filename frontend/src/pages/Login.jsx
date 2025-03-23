@@ -14,10 +14,8 @@ import {
   InputGroup,
   InputRightElement,
   Flex,
-  Image,
   Card,
   CardBody,
-  Switch,
   FormHelperText,
   useColorModeValue,
   Link,
@@ -31,7 +29,6 @@ const Login = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [showApiKey, setShowApiKey] = useState(false);
-  const [useMockApi, setUseMockApi] = useState(apiService.mock.isEnabled());
   
   const navigate = useNavigate();
   const location = useLocation();
@@ -51,7 +48,7 @@ const Login = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    if (!apiKey.trim() && !useMockApi) {
+    if (!apiKey.trim()) {
       setError('Please enter your API key');
       return;
     }
@@ -60,35 +57,15 @@ const Login = () => {
     setError('');
     
     try {
-      if (useMockApi) {
-        // Enable mock API mode
-        apiService.mock.enable();
-        
-        // Use a fake API key for mock mode
-        apiService.auth.setApiKey('mock-api-key');
-        
-        // Redirect to requested page
-        navigate(from, { replace: true });
-      } else {
-        // In a real implementation, we would validate the API key
-        // For MVP, we'll just store it and assume it's valid
-        apiService.auth.setApiKey(apiKey);
-        
-        // Redirect to requested page
-        navigate(from, { replace: true });
-      }
+      // Store the API key
+      apiService.auth.setApiKey(apiKey);
+      
+      // Redirect to requested page
+      navigate(from, { replace: true });
     } catch (err) {
       setError('Authentication failed. Please check your API key and try again.');
     } finally {
       setIsLoading(false);
-    }
-  };
-  
-  const toggleMockApi = () => {
-    setUseMockApi(!useMockApi);
-    if (!useMockApi) {
-      // Clearing API key when enabling mock mode
-      setApiKey('');
     }
   };
   
@@ -111,50 +88,27 @@ const Login = () => {
             
             <form onSubmit={handleSubmit}>
               <VStack spacing={6}>
-                <FormControl id="mock-api" display="flex" alignItems="center" justifyContent="space-between">
-                  <FormLabel htmlFor="mock-api-switch" mb="0">
-                    Use Mock API
-                  </FormLabel>
-                  <Switch 
-                    id="mock-api-switch" 
-                    isChecked={useMockApi} 
-                    onChange={toggleMockApi}
-                    colorScheme="blue"
-                  />
+                <FormControl id="api-key" isRequired>
+                  <FormLabel>API Key</FormLabel>
+                  <InputGroup>
+                    <Input
+                      type={showApiKey ? 'text' : 'password'}
+                      value={apiKey}
+                      onChange={(e) => setApiKey(e.target.value)}
+                      placeholder="Enter your API key"
+                      autoComplete="off"
+                      pr="4.5rem"
+                    />
+                    <InputRightElement width="4.5rem">
+                      <Button h="1.75rem" size="sm" onClick={() => setShowApiKey(!showApiKey)}>
+                        {showApiKey ? <FiEyeOff /> : <FiEye />}
+                      </Button>
+                    </InputRightElement>
+                  </InputGroup>
+                  <FormHelperText>
+                    Enter your NexusFlow API key to access the platform
+                  </FormHelperText>
                 </FormControl>
-                
-                {!useMockApi && (
-                  <FormControl id="api-key" isRequired>
-                    <FormLabel>API Key</FormLabel>
-                    <InputGroup>
-                      <Input
-                        type={showApiKey ? 'text' : 'password'}
-                        value={apiKey}
-                        onChange={(e) => setApiKey(e.target.value)}
-                        placeholder="Enter your API key"
-                        autoComplete="off"
-                        pr="4.5rem"
-                      />
-                      <InputRightElement width="4.5rem">
-                        <Button h="1.75rem" size="sm" onClick={() => setShowApiKey(!showApiKey)}>
-                          {showApiKey ? <FiEyeOff /> : <FiEye />}
-                        </Button>
-                      </InputRightElement>
-                    </InputGroup>
-                    <FormHelperText>
-                      Enter your NexusFlow API key to access the platform
-                    </FormHelperText>
-                  </FormControl>
-                )}
-                
-                {useMockApi && (
-                  <Alert status="info" rounded="md">
-                    <AlertIcon />
-                    <Text fontSize="sm">
-                      Mock API mode enabled. This will use simulated responses for development and demo purposes.
-                    </Text>
-                  </Alert>
-                )}
                 
                 <Button
                   type="submit"
@@ -164,17 +118,12 @@ const Login = () => {
                   isLoading={isLoading}
                   leftIcon={<FiKey />}
                 >
-                  {useMockApi ? 'Continue with Mock API' : 'Sign In with API Key'}
+                  Sign In with API Key
                 </Button>
                 
-                {!useMockApi && (
-                  <Text fontSize="sm" color="gray.500" textAlign="center">
-                    Don't have an API key? Contact your administrator or 
-                    <Link color="blue.500" ml={1} onClick={toggleMockApi}>
-                      use mock mode for testing
-                    </Link>.
-                  </Text>
-                )}
+                <Text fontSize="sm" color="gray.500" textAlign="center">
+                  Don't have an API key? Contact your administrator for access.
+                </Text>
               </VStack>
             </form>
           </VStack>
