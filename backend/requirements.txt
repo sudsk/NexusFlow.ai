@@ -20,6 +20,8 @@ tiktoken>=0.5.1
 langchain-experimental>=0.3.4 
 langgraph>=0.3.18
 crewai>=0.28.0  # Optional, can be commented out if not using CrewAI
+langchain-anthropic>=0.3.10 
+langchain-openai>=0.3.9
 
 # Testing
 pytest>=7.4.2
