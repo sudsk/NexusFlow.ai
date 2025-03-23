@@ -115,7 +115,7 @@ async def get_recent_executions(
         logger.exception(f"Error retrieving recent executions: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/stats", response_model=Dict[str, Any])
+@router.get("/stats/", response_model=Dict[str, Any])
 async def get_execution_stats(
     execution_service: ExecutionService = Depends(get_execution_service),
     user_info: dict = Depends(verify_api_key)
