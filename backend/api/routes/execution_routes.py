@@ -31,7 +31,7 @@ def get_execution_service(db: Session = Depends(get_db)):
     flow_service = FlowService(flow_repo)
     return ExecutionService(flow_repo, execution_repo)
 
-@router.post("/", response_model=ExecutionResponse)
+@router.post("", response_model=ExecutionResponse)
 async def execute_flow(
     request: ExecutionRequest,
     background_tasks: BackgroundTasks,
@@ -97,7 +97,7 @@ async def get_flow_executions(
         logger.exception(f"Error retrieving flow executions: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/", response_model=ExecutionListResponse)
+@router.get("", response_model=ExecutionListResponse)
 async def get_recent_executions(
     limit: int = Query(10, ge=1, le=50),
     execution_service: ExecutionService = Depends(get_execution_service),
