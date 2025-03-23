@@ -32,7 +32,7 @@ import {
   useColorModeValue,
   useColorMode,
 } from '@chakra-ui/react';
-import { FiSave, FiEye, FiEyeOff, FiKey, FiRefreshCw } from 'react-icons/fi';
+import { FiSave, FiEye, FiEyeOff, FiKey } from 'react-icons/fi';
 import apiService from '../services/api';
 
 const Settings = () => {
@@ -41,7 +41,6 @@ const Settings = () => {
   
   const [apiKey, setApiKey] = useState('');
   const [showApiKey, setShowApiKey] = useState(false);
-  const [useMockApi, setUseMockApi] = useState(apiService.mock.isEnabled());
   const [settings, setSettings] = useState({
     defaultFramework: 'langgraph',
     enableStreamingExecutions: true,
@@ -133,28 +132,6 @@ const Settings = () => {
       // Mask the API key after saving
       setApiKey('•'.repeat(16));
     }
-  };
-
-  // Toggle mock API mode
-  const handleToggleMockApi = () => {
-    const newValue = !useMockApi;
-    setUseMockApi(newValue);
-    
-    if (newValue) {
-      apiService.mock.enable();
-    } else {
-      apiService.mock.disable();
-    }
-    
-    toast({
-      title: newValue ? 'Mock API enabled' : 'Mock API disabled',
-      description: newValue 
-        ? 'Using simulated API responses for development'
-        : 'Using real API endpoints',
-      status: 'info',
-      duration: 3000,
-      isClosable: true,
-    });
   };
 
   // Handle form field changes
@@ -285,26 +262,6 @@ const Settings = () => {
                   >
                     Update API Key
                   </Button>
-                  
-                  <Divider my={2} />
-                  
-                  <FormControl display="flex" alignItems="center">
-                    <FormLabel mb="0">Use Mock API</FormLabel>
-                    <Switch
-                      isChecked={useMockApi}
-                      onChange={handleToggleMockApi}
-                      colorScheme="orange"
-                    />
-                  </FormControl>
-                  
-                  {useMockApi && (
-                    <Alert status="info" borderRadius="md">
-                      <AlertIcon />
-                      <Text fontSize="sm">
-                        Mock API mode is enabled. All API calls will use simulated responses for development purposes.
-                      </Text>
-                    </Alert>
-                  )}
                 </VStack>
               </CardBody>
             </Card>
