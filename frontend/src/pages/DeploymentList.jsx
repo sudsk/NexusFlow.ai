@@ -99,77 +99,28 @@ const DeploymentList = () => {
   const fetchDeployments = async () => {
     setIsLoading(true);
     try {
-      // In a real implementation, this would call the API
-      // const response = await apiService.deployments.getAll();
-      // setDeployments(response.data.items || []);
+      // If we have a flowId parameter, fetch deployments for that flow
+      let response;
+      if (flowIdParam) {
+        response = await apiService.deployments.getByFlowId(flowIdParam);
+      } else {
+        // Otherwise, fetch all deployments
+        // Note: You might need to adjust this based on your API structure
+        // This assumes there's a getAll method in the deployments service
+        response = await apiService.deployments.getAll();
+      }
       
-      // Mock data for development
-      await new Promise(resolve => setTimeout(resolve, 800));
-      
-      const mockDeployments = [
-        {
-          id: 'd1',
-          flow_id: '1',
-          flow_name: 'Research Assistant',
-          name: 'Research Assistant API',
-          version: 'v1',
-          status: 'active',
-          endpoint_url: 'https://api.nexusflow.ai/api/flows/d1/execute',
-          created_at: '2025-03-12T14:30:00Z',
-          updated_at: '2025-03-12T14:30:00Z',
-          settings: {
-            rate_limit: 10,
-            timeout_seconds: 30,
-            log_level: 'info',
-            cors_enabled: true,
-          }
-        },
-        {
-          id: 'd2',
-          flow_id: '2',
-          flow_name: 'Code Generator',
-          name: 'Code Generator API',
-          version: 'v2',
-          status: 'active',
-          endpoint_url: 'https://api.nexusflow.ai/api/flows/d2/execute',
-          created_at: '2025-03-10T11:15:00Z',
-          updated_at: '2025-03-14T09:30:00Z',
-          settings: {
-            rate_limit: 5,
-            timeout_seconds: 60,
-            log_level: 'debug',
-            cors_enabled: true,
-          }
-        },
-        {
-          id: 'd3',
-          flow_id: '3',
-          flow_name: 'Customer Support',
-          name: 'Customer Support API',
-          version: 'v1',
-          status: 'inactive',
-          endpoint_url: 'https://api.nexusflow.ai/api/flows/d3/execute',
-          created_at: '2025-03-05T16:45:00Z',
-          updated_at: '2025-03-13T10:20:00Z',
-          settings: {
-            rate_limit: 20,
-            timeout_seconds: 45,
-            log_level: 'info',
-            cors_enabled: false,
-          }
-        },
-      ];
-      
-      setDeployments(mockDeployments);
+      setDeployments(response.data.items || []);
     } catch (error) {
       console.error('Error fetching deployments:', error);
       toast({
         title: 'Error fetching deployments',
-        description: error.message,
+        description: error.message || 'Failed to fetch deployments',
         status: 'error',
         duration: 5000,
         isClosable: true,
       });
+      setDeployments([]);
     } finally {
       setIsLoading(false);
     }
@@ -177,39 +128,18 @@ const DeploymentList = () => {
 
   const fetchFlows = async () => {
     try {
-      // In a real implementation, this would call the API
-      // const response = await apiService.flows.getAll();
-      // setFlows(response.data.items || []);
-      
-      // Mock data for development
-      const mockFlows = [
-        {
-          id: '1',
-          name: 'Research Assistant',
-          framework: 'langgraph',
-        },
-        {
-          id: '2',
-          name: 'Code Generator',
-          framework: 'langgraph',
-        },
-        {
-          id: '3',
-          name: 'Customer Support',
-          framework: 'crewai',
-        },
-      ];
-      
-      setFlows(mockFlows);
+      const response = await apiService.flows.getAll();
+      setFlows(response.data.items || []);
     } catch (error) {
       console.error('Error fetching flows:', error);
       toast({
         title: 'Error fetching flows',
-        description: error.message,
+        description: error.message || 'Failed to fetch flows',
         status: 'error',
         duration: 5000,
         isClosable: true,
       });
+      setFlows([]);
     }
   };
 
@@ -244,8 +174,7 @@ const DeploymentList = () => {
 
   const handleDeleteDeployment = async (deploymentId) => {
     try {
-      // In a real implementation, this would call the API
-      // await apiService.deployments.delete(deploymentId);
+      await apiService.deployments.delete(deploymentId);
       
       // Remove from UI
       setDeployments(deployments.filter(d => d.id !== deploymentId));
@@ -260,7 +189,7 @@ const DeploymentList = () => {
       console.error('Error deleting deployment:', error);
       toast({
         title: 'Error deleting deployment',
-        description: error.message,
+        description: error.message || 'Failed to delete deployment',
         status: 'error',
         duration: 5000,
         isClosable: true,
@@ -272,8 +201,13 @@ const DeploymentList = () => {
     const newStatus = deployment.status === 'active' ? 'inactive' : 'active';
     
     try {
-      // In a real implementation, this would call the API
-      // await apiService.deployments.update(deployment.id, { status: newStatus });
+      if (newStatus === 'inactive') {
+        // Deactivate the deployment
+        await apiService.deployments.deactivate(deployment.id);
+      } else {
+        // Activate the deployment by updating its status
+        await apiService.deployments.update(deployment.id, { status: 'active' });
+      }
       
       // Update UI
       setDeployments(deployments.map(d => 
@@ -290,7 +224,7 @@ const DeploymentList = () => {
       console.error('Error updating deployment status:', error);
       toast({
         title: 'Error updating deployment',
-        description: error.message,
+        description: error.message || 'Failed to update deployment status',
         status: 'error',
         duration: 5000,
         isClosable: true,
@@ -330,7 +264,7 @@ const DeploymentList = () => {
   const handleSaveDeployment = async () => {
     // Set name from flow if not provided
     if (!formData.name && formData.flow_id) {
-      const selectedFlow = flows.find(f => f.id === formData.flow_id);
+      const selectedFlow = flows.find(f => f.flow_id === formData.flow_id);
       if (selectedFlow) {
         formData.name = `${selectedFlow.name} API`;
       }
@@ -349,18 +283,15 @@ const DeploymentList = () => {
     }
     
     try {
+      let response;
+      
       if (currentDeployment) {
         // Update existing deployment
-        // In a real implementation, this would call the API
-        // await apiService.deployments.update(currentDeployment.id, formData);
+        response = await apiService.deployments.update(currentDeployment.id, formData);
         
         // Update UI
         setDeployments(deployments.map(d => 
-          d.id === currentDeployment.id ? { 
-            ...d, 
-            ...formData,
-            updated_at: new Date().toISOString()
-          } : d
+          d.id === currentDeployment.id ? response.data : d
         ));
         
         toast({
@@ -371,25 +302,10 @@ const DeploymentList = () => {
         });
       } else {
         // Create new deployment
-        // In a real implementation, this would call the API
-        // const response = await apiService.deployments.create(formData);
+        response = await apiService.deployments.deploy(formData.flow_id, formData);
         
-        // Mock response
-        const flowName = flows.find(f => f.id === formData.flow_id)?.name || 'Unknown Flow';
-        const newDeployment = {
-          id: `d${deployments.length + 1}`,
-          flow_id: formData.flow_id,
-          flow_name: flowName,
-          name: formData.name,
-          version: formData.version,
-          status: 'active',
-          endpoint_url: `https://api.nexusflow.ai/api/flows/d${deployments.length + 1}/execute`,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          settings: formData.settings
-        };
-        
-        setDeployments([...deployments, newDeployment]);
+        // Add to UI
+        setDeployments([...deployments, response.data]);
         
         toast({
           title: 'Deployment created',
@@ -400,16 +316,25 @@ const DeploymentList = () => {
       }
       
       onClose();
+      
+      // Refresh the list to ensure we have the latest data
+      fetchDeployments();
     } catch (error) {
       console.error('Error saving deployment:', error);
       toast({
         title: 'Error saving deployment',
-        description: error.message,
+        description: error.message || 'Failed to save deployment',
         status: 'error',
         duration: 5000,
         isClosable: true,
       });
     }
+  };
+
+  // Helper to get flow name from flow ID
+  const getFlowName = (flowId) => {
+    const flow = flows.find(f => f.flow_id === flowId);
+    return flow ? flow.name : flowId;
   };
 
   return (
@@ -458,7 +383,7 @@ const DeploymentList = () => {
               {deployments.map((deployment) => (
                 <Tr key={deployment.id}>
                   <Td fontWeight="bold">{deployment.name}</Td>
-                  <Td>{deployment.flow_name}</Td>
+                  <Td>{deployment.flow_name || getFlowName(deployment.flow_id)}</Td>
                   <Td>{deployment.version}</Td>
                   <Td>
                     <Badge 
@@ -546,7 +471,7 @@ const DeploymentList = () => {
                 isDisabled={!!currentDeployment}
               >
                 {flows.map((flow) => (
-                  <option key={flow.id} value={flow.id}>
+                  <option key={flow.flow_id} value={flow.flow_id}>
                     {flow.name} ({flow.framework})
                   </option>
                 ))}
