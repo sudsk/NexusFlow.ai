@@ -13,34 +13,43 @@ logger = logging.getLogger(__name__)
 
 class LangGraphAdapter(FrameworkAdapter):
     """Adapter for LangGraph framework"""
-    
+
     def __init__(self):
-        # Check if langgraph is installed
+    # Check if langgraph is installed
+    try:
+        self.langgraph_available = True
+        import langchain
+        self.langchain_version = langchain.__version__
+        
+        # Import LangGraph modules conditionally
         try:
-            self.langgraph_available = True
-            import langchain
-            self.langchain_version = langchain.__version__
+            import langgraph
+            from langgraph.graph import StateGraph
+            self.StateGraph = StateGraph
+            self.langgraph_version = langgraph.__version__
             
-            # Import LangGraph modules conditionally
-            from langchain.graphs import Graph
-            self.Graph = Graph
-            
-            # Check if we have LangGraph components
+            # Check if we have LangChain components
             try:
                 from langchain_experimental import pydantic_v1
-                from langchain.agents import AgentExecutor, tool
+                from langchain.agents import AgentExecutor
+                from langchain.tools import tool
                 self.AgentExecutor = AgentExecutor
                 self.tool_decorator = tool
                 self.has_full_imports = True
-            except ImportError:
+            except ImportError as e:
+                logger.warning(f"LangChain agent components not available: {str(e)}")
                 self.has_full_imports = False
-                logger.warning("LangGraph agent components not available")
                 
-        except ImportError:
+        except ImportError as e:
+            logger.warning(f"LangGraph components not available: {str(e)}")
             self.langgraph_available = False
-            logger.warning("LangGraph not installed - some functionality may be limited")
             self.has_full_imports = False
-            
+                
+    except ImportError:
+        self.langgraph_available = False
+        logger.warning("LangChain not installed - some functionality may be limited")
+        self.has_full_imports = False
+
     def get_framework_name(self) -> str:
         return "langgraph"
     
