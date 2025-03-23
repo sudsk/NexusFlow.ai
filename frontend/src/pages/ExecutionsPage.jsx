@@ -23,9 +23,7 @@ import {
   InputGroup,
   InputLeftElement,
   Card,
-  CardHeader,
   CardBody,
-  Tooltip,
   Menu,
   MenuButton,
   MenuList,
@@ -58,6 +56,13 @@ const ExecutionsPage = () => {
   const toast = useToast();
   const [executions, setExecutions] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [stats, setStats] = useState({
+    total: 0,
+    completed: 0,
+    failed: 0,
+    running: 0,
+    successRate: 0
+  });
   const [filter, setFilter] = useState({
     framework: '',
     status: '',
@@ -75,6 +80,7 @@ const ExecutionsPage = () => {
       case 'failed': return 'red';
       case 'running': return 'blue';
       case 'pending': return 'orange';
+      case 'cancelled': return 'gray';
       default: return 'gray';
     }
   };
@@ -85,6 +91,7 @@ const ExecutionsPage = () => {
       case 'completed': return FiCheck;
       case 'failed': return FiX;
       case 'running': case 'pending': return FiClock;
+      case 'cancelled': return FiX;
       default: return FiActivity;
     }
   };
@@ -114,108 +121,84 @@ const ExecutionsPage = () => {
   const fetchExecutions = async () => {
     setIsLoading(true);
     try {
-      // In a real implementation, this would use the API service
-      // For now, let's use mock data
-      await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API delay
+      // Fetch recent executions from the API
+      const response = await apiService.executions.getRecent(20);
       
-      // Mock data
-      const mockExecutions = [
-        {
-          id: '101',
-          flow_id: '1',
-          flow_name: 'Research Assistant',
-          framework: 'langgraph',
-          status: 'completed',
-          started_at: '2025-03-14T09:23:45Z',
-          completed_at: '2025-03-14T09:25:27Z',
-          duration: '1m 42s',
-          steps: 7,
-          input: { query: "What are the latest developments in AI?" },
-          result: { output: "Here's a summary of the latest AI developments..." }
-        },
-        {
-          id: '102',
-          flow_id: '2',
-          flow_name: 'Code Generator',
-          framework: 'langgraph',
-          status: 'completed',
-          started_at: '2025-03-14T08:15:22Z',
-          completed_at: '2025-03-14T08:17:39Z',
-          duration: '2m 17s',
-          steps: 9,
-          input: { query: "Generate a React component for a dashboard" },
-          result: { output: "Here's a React dashboard component..." }
-        },
-        {
-          id: '103',
-          flow_id: '3',
-          flow_name: 'Customer Support',
-          framework: 'crewai',
-          status: 'failed',
-          started_at: '2025-03-13T17:05:11Z',
-          completed_at: '2025-03-13T17:05:48Z',
-          duration: '0m 37s',
-          steps: 3,
-          input: { query: "I need help with my account" },
-          error: "Tool execution error: API rate limit exceeded"
-        },
-        {
-          id: '104',
-          flow_id: '1',
-          flow_name: 'Research Assistant',
-          framework: 'langgraph',
-          status: 'completed',
-          started_at: '2025-03-13T14:52:37Z',
-          completed_at: '2025-03-13T14:54:32Z',
-          duration: '1m 55s',
-          steps: 8,
-          input: { query: "Summarize recent climate research" },
-          result: { output: "Recent climate research has focused on..." }
-        },
-        {
-          id: '105',
-          flow_id: '4',
-          flow_name: 'Data Analyzer',
-          framework: 'autogen',
-          status: 'running',
-          started_at: '2025-03-14T10:12:15Z',
-          completed_at: null,
-          duration: '30m+',
-          steps: 12,
-          input: { query: "Analyze this financial dataset and provide insights" }
-        },
-        {
-          id: '106',
-          flow_id: '3',
-          flow_name: 'Customer Support',
-          framework: 'crewai',
-          status: 'completed',
-          started_at: '2025-03-12T11:34:22Z',
-          completed_at: '2025-03-12T11:37:45Z',
-          duration: '3m 23s',
-          steps: 5,
-          input: { query: "How do I reset my password?" },
-          result: { output: "You can reset your password by..." }
-        }
-      ];
-      
-      setExecutions(mockExecutions);
+      if (response.data && response.data.items) {
+        setExecutions(response.data.items);
+        
+        // Calculate stats
+        const executionData = response.data.items;
+        const completedCount = executionData.filter(e => e.status === 'completed').length;
+        const failedCount = executionData.filter(e => e.status === 'failed').length;
+        const runningCount = executionData.filter(e => e.status === 'running' || e.status === 'pending').length;
+        const successRate = executionData.length > 0 
+          ? Math.round((completedCount / (completedCount + failedCount)) * 100) 
+          : 0;
+          
+        setStats({
+          total: executionData.length,
+          completed: completedCount,
+          failed: failedCount,
+          running: runningCount,
+          successRate: successRate
+        });
+      } else {
+        // Handle empty or unexpected response format
+        setExecutions([]);
+        setStats({
+          total: 0,
+          completed: 0,
+          failed: 0,
+          running: 0,
+          successRate: 0
+        });
+        toast({
+          title: 'Warning',
+          description: 'Received empty or unexpected data format from server',
+          status: 'warning',
+          duration: 5000,
+          isClosable: true,
+        });
+      }
     } catch (error) {
       console.error('Error fetching executions:', error);
       toast({
         title: 'Error fetching executions',
-        description: error.message,
+        description: error.message || 'Failed to fetch executions from server',
         status: 'error',
         duration: 5000,
         isClosable: true,
       });
+      setExecutions([]);
     } finally {
       setIsLoading(false);
     }
   };
   
+  const fetchExecutionStats = async () => {
+    try {
+      // Fetch execution statistics from the API
+      const response = await apiService.executions.getStats();
+      
+      if (response.data) {
+        setStats({
+          total: response.data.total_executions || 0,
+          completed: response.data.completed_executions || 0,
+          failed: response.data.failed_executions || 0,
+          running: response.data.running_executions || 0,
+          successRate: response.data.success_rate || 0
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching execution stats:', error);
+      // We'll use the calculated stats from executionData if this fails
+    }
+  };
+  
   const handleRefresh = () => {
     fetchExecutions();
+    fetchExecutionStats();
   };
   
   const handleFilterChange = (field, value) => {
@@ -229,32 +212,50 @@ const ExecutionsPage = () => {
     navigate(`/executions/${executionId}`);
   };
   
-  const handleDeleteExecution = (executionId) => {
-    // In a real implementation, this would call the API
-    toast({
-      title: 'Execution deleted',
-      description: `Execution ${executionId} has been deleted`,
-      status: 'success',
-      duration: 3000,
-      isClosable: true,
-    });
-    
-    // Remove from state
-    setExecutions(executions.filter(exec => exec.id !== executionId));
+  const handleDeleteExecution = async (executionId) => {
+    try {
+      await apiService.executions.delete(executionId);
+      
+      toast({
+        title: 'Execution deleted',
+        description: `Execution ${executionId} has been deleted`,
+        status: 'success',
+        duration: 3000,
+        isClosable: true,
+      });
+      
+      // Remove from state
+      setExecutions(executions.filter(exec => exec.id !== executionId));
+      
+      // Update stats
+      setStats({
+        ...stats,
+        total: stats.total - 1
+      });
+    } catch (error) {
+      console.error('Error deleting execution:', error);
+      toast({
+        title: 'Error deleting execution',
+        description: error.message || 'Failed to delete execution',
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      });
+    }
   };
   
   const handleDownloadResults = (execution) => {
     // Create a JSON blob with execution results
     const data = {
       id: execution.id,
-      flow_name: execution.flow_name,
+      flow_name: execution.flow_name || `Flow ${execution.flow_id}`,
       framework: execution.framework,
       input: execution.input,
       result: execution.result || { error: execution.error },
       started_at: execution.started_at,
       completed_at: execution.completed_at,
       status: execution.status,
-      steps: execution.steps
+      steps: execution.steps || execution.execution_trace?.length || 0
     };
     
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -278,7 +279,9 @@ const ExecutionsPage = () => {
   };
   
   useEffect(() => {
+    // Fetch both executions and stats when component mounts
     fetchExecutions();
+    fetchExecutionStats();
   }, []);
   
   // Apply filters to executions
@@ -293,13 +296,15 @@ const ExecutionsPage = () => {
       return false;
     }
     
-    // Query filter (search in flow_name and input)
+    // Query filter (search in flow_id, flow_name and input)
     if (filter.query) {
       const query = filter.query.toLowerCase();
-      const flowNameMatch = exec.flow_name.toLowerCase().includes(query);
-      const inputMatch = exec.input?.query?.toLowerCase().includes(query);
+      const flowIdMatch = exec.flow_id?.toLowerCase().includes(query);
+      const flowNameMatch = exec.flow_name?.toLowerCase().includes(query);
+      const inputMatch = typeof exec.input?.query === 'string' && 
+                         exec.input.query.toLowerCase().includes(query);
       
-      return flowNameMatch || inputMatch;
+      return flowIdMatch || flowNameMatch || inputMatch;
     }
     
     return true;
@@ -354,6 +359,7 @@ const ExecutionsPage = () => {
                 <option value="failed">Failed</option>
                 <option value="running">Running</option>
                 <option value="pending">Pending</option>
+                <option value="cancelled">Cancelled</option>
               </Select>
             </FormControl>
             
@@ -402,7 +408,7 @@ const ExecutionsPage = () => {
           <Table variant="simple">
             <Thead>
               <Tr>
-                <Th>Flow Name</Th>
+                <Th>Flow ID</Th>
                 <Th>Framework</Th>
                 <Th>Status</Th>
                 <Th>Started</Th>
@@ -419,7 +425,7 @@ const ExecutionsPage = () => {
                   cursor="pointer"
                   onClick={() => handleViewExecution(execution.id)}
                 >
-                  <Td fontWeight="medium">{execution.flow_name}</Td>
+                  <Td fontWeight="medium">{execution.flow_name || execution.flow_id}</Td>
                   <Td>
                     <HStack>
                       <Icon as={getFrameworkIcon(execution.framework)} color={`${getFrameworkColor(execution.framework)}.500`} />
@@ -435,8 +441,8 @@ const ExecutionsPage = () => {
                     </Badge>
                   </Td>
                   <Td>{new Date(execution.started_at).toLocaleString()}</Td>
-                  <Td>{execution.duration}</Td>
-                  <Td>{execution.steps}</Td>
+                  <Td>{execution.duration || 'N/A'}</Td>
+                  <Td>{execution.steps || execution.execution_trace?.length || 0}</Td>
                   <Td onClick={(e) => e.stopPropagation()}>
                     <Menu>
                       <MenuButton
@@ -463,6 +469,7 @@ const ExecutionsPage = () => {
                           icon={<FiTrash2 />}
                           onClick={() => handleDeleteExecution(execution.id)}
                           color="red.500"
+                          isDisabled={execution.status === 'running' || execution.status === 'pending'}
                         >
                           Delete
                         </MenuItem>
@@ -478,34 +485,30 @@ const ExecutionsPage = () => {
       
       {/* Stats Summary Card */}
       <Card bg={cardBg} borderColor={borderColor} borderWidth="1px" mt={6} p={4}>
-        <HStack spacing={6}>
+        <HStack spacing={6} flexWrap="wrap">
           <Flex align="center">
             <Text fontWeight="bold" mr={2}>Total Executions:</Text>
-            <Text>{executions.length}</Text>
+            <Text>{stats.total}</Text>
           </Flex>
           
           <Flex align="center">
             <Text fontWeight="bold" mr={2}>Completed:</Text>
-            <Text>{executions.filter(e => e.status === 'completed').length}</Text>
+            <Text>{stats.completed}</Text>
           </Flex>
           
           <Flex align="center">
             <Text fontWeight="bold" mr={2}>Failed:</Text>
-            <Text>{executions.filter(e => e.status === 'failed').length}</Text>
+            <Text>{stats.failed}</Text>
           </Flex>
           
           <Flex align="center">
             <Text fontWeight="bold" mr={2}>Running:</Text>
-            <Text>{executions.filter(e => e.status === 'running').length}</Text>
+            <Text>{stats.running}</Text>
           </Flex>
           
           <Flex align="center">
             <Text fontWeight="bold" mr={2}>Success Rate:</Text>
-            <Text>
-              {executions.length > 0 
-                ? Math.round((executions.filter(e => e.status === 'completed').length / executions.length) * 100) 
-                : 0}%
-            </Text>
+            <Text>{stats.successRate}%</Text>
           </Flex>
         </HStack>
       </Card>
